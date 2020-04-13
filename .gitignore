@@ -1,0 +1,17 @@
+# generated
+*.cmd
+*.ko
+*.mod
+*.mod.c
+*.o
+*.order
+*.s
+*.symvers
+*.d
+
+# binaries
+src/receiver/receiver
+src/sender/sender
+
+# misc
+.vscode
