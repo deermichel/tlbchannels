@@ -1,5 +1,4 @@
 #include <fcntl.h>
-// #include <sys/stat.h>
 #include <unistd.h>
 #include "../asm.h"
 #include "../memory.h"
@@ -21,24 +20,30 @@ void open_pteaccess() {
     }
 }
 
-// receive packet
-void receive_packet(packet_t *packet) {
+// receive packet via accessed bits
+void receive_packet_pteaccess(packet_t *packet) {
     // prepare packet - why? descheduled?
     memset(packet->raw, 0xFF, PACKET_SIZE);
-
-    // receiver loop
-    // for (int i = 0; i < args.window; i++) {
-    // }
 
     // touch pages to create tlb entries
     for (int set = 0; set < TLB_SETS; set++) {
         TOUCH_MEMORY(ADDR(BASE_ADDR, set, 0));
     }
 
-    // usleep(100); when on same thead!
-
     // get packet from access bits
     pread(pteaccess_fd, packet->raw64, PACKET_SIZE, 0);
+}
+
+// receive packet via timestamps
+void receive_packet_rdtsc(packet_t *packet) {
+    // clear packet
+    memset(packet->raw, 0x00, PACKET_SIZE);
+
+    // get packet from access times
+    packet->raw[0] |= (probe(ADDR(BASE_ADDR, 0, 0)) > 120 ? 1 : 0); // why?
+    for (int set = 1; set < 128; set++) {
+        packet->raw[set / 8] |= ((probe(ADDR(BASE_ADDR, set, 0)) > 40 ? 1 : 0) << (set % 8));
+    }
 }
 
 // entry point
@@ -74,10 +79,10 @@ int main(int argc, char **argv) {
     // receiver loop
     packet_t packet;
     while (1) {
-        receive_packet(&packet);
+        receive_packet_rdtsc(&packet);
 
         // data stop
-        if (packet.header[0] == 0xEE) break;
+        if (packet.header[0] == 0xEE && packet.header[1] == 0xFF) break;
 
         // check header
         static uint8_t next_sqn = 0;
