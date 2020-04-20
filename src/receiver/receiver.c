@@ -1,5 +1,7 @@
 #include <fcntl.h>
+#include <time.h>
 #include <unistd.h>
+#include <x86intrin.h>
 #include "../asm.h"
 #include "../memory.h"
 #include "../packet.h"
@@ -79,17 +81,21 @@ int main(int argc, char **argv) {
 
     // receiver loop
     packet_t packet;
+    uint32_t packets_received = 0;
+    struct timespec first_packet_time, now;
     while (1) {
-        receive_packet_rdtsc(&packet);
+        receive_packet_pteaccess(&packet);
 
         // data stop
-        if (packet.header[0] == 0xEE && packet.header[1] == 0xFF) break;
+        if (packet.header[0] == 0xEE && packet.header[1] == 0xFF && packet.header[2] == 0xFF) break;
 
         // check header
         static uint8_t next_sqn = 0;
         uint8_t expected_header = 0xD0 | (next_sqn % 4);
-        if (packet.header[0] != expected_header) continue;
-        next_sqn++;
+        if (packet.header[0] != expected_header) {
+            // printf("corrupt header - ");
+            continue;
+        }
 
         // debug
         if (args.verbose) {
@@ -97,6 +103,23 @@ int main(int argc, char **argv) {
             for (int i = 0; i < PACKET_SIZE; i++) printf("%02X ", packet.raw[i]);
             printf("\n");
         }
+
+        // checksum
+        uint32_t checksum = 0;
+        for (int i = 0; i < PAYLOAD_SIZE; i++) {
+            checksum = _mm_crc32_u8(checksum, packet.payload[i]);
+        }
+        if (memcmp(&checksum, &packet.header[1], sizeof(uint32_t)) != 0) {
+            printf("corrupt crc32: %0X - \n", checksum);
+            continue;
+        }
+
+        // all right!
+        next_sqn++;
+
+        // count packets
+        packets_received++;
+        if (packets_received == 1) clock_gettime(CLOCK_MONOTONIC, &first_packet_time);
 
         // save to buffer
         memcpy(buffer + offset, packet.payload, PAYLOAD_SIZE);
@@ -114,6 +137,13 @@ int main(int argc, char **argv) {
     // flush buffer
     fwrite(buffer, 1, offset, output);
     fflush(output);
+
+    // stats
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    double secs = now.tv_sec - first_packet_time.tv_sec + (double)(now.tv_nsec - first_packet_time.tv_nsec) / 1000000000;
+    printf("received: %d (%d bytes)\n", packets_received, packets_received * PAYLOAD_SIZE);
+    printf("bandwidth: %.3f kB/s\n", ((packets_received * PAYLOAD_SIZE) / secs) / 1000.0);
+    printf("time: %.3f s\n", secs);
 
     // cleanup
     fclose(output);

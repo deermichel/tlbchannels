@@ -1,6 +1,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <x86intrin.h>
 #include "../asm.h"
 #include "../memory.h"
 #include "../packet.h"
@@ -22,7 +23,13 @@ size_t send_packet(const uint8_t *payload, size_t length) {
         // header
         static uint8_t sqn = 0;
         packet.header[0] = 0xD0 | (sqn++ % 4);
-        packet.header[1] = 0x00;
+
+        // crc32
+        uint32_t checksum = 0;
+        for (int i = 0; i < PAYLOAD_SIZE; i++) {
+            checksum = _mm_crc32_u8(checksum, packet.payload[i]);
+        }
+        memcpy(&packet.header[1], &checksum, sizeof(uint32_t));
     }
 
     // debug
