@@ -2,7 +2,7 @@
 
 all:
 	# cd ../pteaccess && make
-	gcc -Wall -DARCH_BROADWELL -o receiver receiver.c
+	gcc -Wall -Wno-unused-result -g -O3 -DARCH_SKYLAKE -o receiver receiver.c
 
 clean:
 	rm -f receiver
