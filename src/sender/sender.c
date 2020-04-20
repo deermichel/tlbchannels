@@ -21,7 +21,7 @@ size_t send_packet(const uint8_t *payload, size_t length) {
 
         // header
         static uint8_t sqn = 0;
-        packet.header[0] = 0xD0 | (sqn++ & 0x0F);
+        packet.header[0] = 0xD0 | (sqn++ % 4);
         packet.header[1] = 0x00;
     }
 

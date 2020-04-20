@@ -40,9 +40,10 @@ void receive_packet_rdtsc(packet_t *packet) {
     memset(packet->raw, 0x00, PACKET_SIZE);
 
     // get packet from access times
-    packet->raw[0] |= (probe(ADDR(BASE_ADDR, 0, 0)) > 120 ? 1 : 0); // why?
-    for (int set = 1; set < 128; set++) {
-        packet->raw[set / 8] |= ((probe(ADDR(BASE_ADDR, set, 0)) > 40 ? 1 : 0) << (set % 8));
+    for (int set = 0; set < 128; set++) {
+        TOUCH_MEMORY(ADDR(BASE_ADDR, set, 0));
+        usleep(0);
+        packet->raw[set / 8] |= ((probe(ADDR(BASE_ADDR, set, 0)) > 140 ? 1 : 0) << (set % 8));
     }
 }
 
@@ -86,7 +87,7 @@ int main(int argc, char **argv) {
 
         // check header
         static uint8_t next_sqn = 0;
-        uint8_t expected_header = 0xD0 | (next_sqn & 0x0F);
+        uint8_t expected_header = 0xD0 | (next_sqn % 4);
         if (packet.header[0] != expected_header) continue;
         next_sqn++;
 
