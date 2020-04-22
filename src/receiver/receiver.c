@@ -1,26 +1,13 @@
-#include <fcntl.h>
 #include <time.h>
-#include <unistd.h>
 #include <x86intrin.h>
 #include "../asm.h"
 #include "../memory.h"
 #include "../packet.h"
+#include "pteaccess/interface.h"
 #include "cli.h"
 
 // output buffer size (multiples of payload size)
 #define BUFFER_SIZE 20000
-
-// file descriptor of kernel module proc file
-static int pteaccess_fd = -1;
-
-// open kernel module proc file
-void open_pteaccess() {
-    pteaccess_fd = open("/proc/pteaccess", O_RDWR);
-    if (pteaccess_fd == -1) {
-        printf("error opening kernel interface '/proc/pteaccess': %s\n", strerror(errno));
-        exit(1);
-    }
-}
 
 // receive packet via accessed bits
 void receive_packet_pteaccess(packet_t *packet) {
@@ -42,11 +29,16 @@ void receive_packet_rdtsc(packet_t *packet) {
     memset(packet->raw, 0x00, PACKET_SIZE);
 
     // get packet from access times
-    for (int set = 0; set < 128; set++) {
-        TOUCH_MEMORY(ADDR(BASE_ADDR, set, 0));
-        usleep(0);
-        packet->raw[set / 8] |= ((probe(ADDR(BASE_ADDR, set, 0)) > 140 ? 1 : 0) << (set % 8));
+    // usleep(0);
+    // printf("%d", probe(ADDR(BASE_ADDR, 0, 0)) > 110); 
+    packet->raw[0] |= (probe(ADDR(BASE_ADDR, 0, 0)) > 110 ? 1 : 0);
+    for (int set = 1; set < 128; set++) {
+        // usleep(0);
+        // printf("%d", probe(ADDR(BASE_ADDR, set, 0)) > 55); // > 45); on bare
+        packet->raw[set / 8] |= ((probe(ADDR(BASE_ADDR, set, 0)) > 55 ? 1 : 0) << (set % 8));
     }
+    // for (int i = 0; i < PACKET_SIZE; i++) printf("%02X ", packet->raw[i]);
+    // printf("\n");
 }
 
 // entry point
@@ -59,13 +51,10 @@ int main(int argc, char **argv) {
     uint8_t *mem = alloc_mem(BASE_ADDR, mem_size);
 
     // configure kernel module, send vaddrs
-    open_pteaccess();
-    addr_t vaddr = 0x0; // to configure use address 0x0
-    pwrite(pteaccess_fd, (void*)&vaddr, sizeof(addr_t), TLB_SETS); // number of vaddrs
+    pteaccess_open();
+    pteaccess_configure(TLB_SETS);
     for (int set = 0; set < TLB_SETS; set++) {
-        vaddr = ADDR(BASE_ADDR, set, 0);
-        TOUCH_MEMORY(vaddr); // touch pages to create pte (-> zero-page mapping)
-        pwrite(pteaccess_fd, (void*)&vaddr, sizeof(addr_t), set);
+        pteaccess_set_addr(ADDR(BASE_ADDR, set, 0), set);
     }
 
     // open output file
@@ -84,7 +73,7 @@ int main(int argc, char **argv) {
     uint32_t packets_received = 0;
     struct timespec first_packet_time, now;
     while (1) {
-        receive_packet_pteaccess(&packet);
+        receive_packet_rdtsc(&packet);
 
         // data stop
         if (packet.header[0] == 0xEE && packet.header[1] == 0xFF && packet.header[2] == 0xFF) break;
@@ -97,21 +86,22 @@ int main(int argc, char **argv) {
             continue;
         }
 
-        // debug
-        if (args.verbose) {
-            printf("rcv: ");
-            for (int i = 0; i < PACKET_SIZE; i++) printf("%02X ", packet.raw[i]);
-            printf("\n");
-        }
-
         // checksum
         uint32_t checksum = 0;
         for (int i = 0; i < PAYLOAD_SIZE; i++) {
             checksum = _mm_crc32_u8(checksum, packet.payload[i]);
         }
-        if (memcmp(&checksum, &packet.header[1], sizeof(uint32_t)) != 0) {
-            printf("corrupt crc32: %0X - \n", checksum);
+        checksum >>= 24;
+        if (memcmp(&checksum, &packet.header[1], sizeof(uint8_t)) != 0) {
+            // printf("corrupt crc32: %0X - \n", checksum);
             continue;
+        }
+
+        // debug
+        if (args.verbose) {
+            printf("rcv: ");
+            for (int i = 0; i < PACKET_SIZE; i++) printf("%02X ", packet.raw[i]);
+            printf("\n");
         }
 
         // all right!
@@ -148,6 +138,6 @@ int main(int argc, char **argv) {
     // cleanup
     fclose(output);
     dealloc_mem(mem, mem_size);
-    close(pteaccess_fd);
+    pteaccess_close();
     return 0;
 }
