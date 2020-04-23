@@ -54,7 +54,7 @@ size_t send_packet(const uint8_t *payload, size_t length) {
         }
     }
     packet.end = rdtsc();
-    record_packet(&packet); // logging
+    if (payload != NULL) record_packet(&packet); // logging
 
     return tosend;
 }

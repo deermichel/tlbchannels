@@ -15,6 +15,8 @@ void receive_packet_pteaccess(packet_t *packet) {
     // prepare packet - why? descheduled?
     memset(packet->raw, 0xFF, PACKET_SIZE);
 
+    packet->start = rdtsc();
+
     // touch pages to create tlb entries
     for (int set = 0; set < TLB_SETS; set++) {
         TOUCH_MEMORY(ADDR(BASE_ADDR, set, 0));
@@ -22,6 +24,8 @@ void receive_packet_pteaccess(packet_t *packet) {
 
     // get packet from access bits
     pread(pteaccess_fd, packet->raw64, PACKET_SIZE, 0);
+
+    packet->end = rdtsc();
 }
 
 uint16_t evictions[128] = {0};
@@ -104,12 +108,6 @@ int main(int argc, char **argv) {
     while (1) {
         receive_packet_pteaccess(&packet);
 
-        // debug
-        if (args.verbose) {
-            printf("rcv: ");
-            print_packet(&packet);
-        }
-
         // data stop
         if (packet.header[0] == 0xEE && packet.header[1] == 0xFF && packet.header[2] == 0xFF) break;
 
@@ -132,7 +130,14 @@ int main(int argc, char **argv) {
             continue;
         }
 
+        // debug
+        if (args.verbose) {
+            printf("rcv: ");
+            print_packet(&packet);
+        }
+
         // all right!
+        record_packet(&packet); // logging
         next_sqn++;
 
         // count packets
@@ -155,6 +160,9 @@ int main(int argc, char **argv) {
     // flush buffer
     fwrite(buffer, 1, offset, output);
     fflush(output);
+
+    // end logging
+    record_packet(NULL);
 
     // stats
     clock_gettime(CLOCK_MONOTONIC, &now);
