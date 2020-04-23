@@ -23,6 +23,8 @@ void receive_packet_pteaccess(packet_t *packet) {
     pread(pteaccess_fd, packet->raw64, PACKET_SIZE, 0);
 }
 
+uint16_t evictions[128] = {0};
+
 // receive packet via timestamps
 void receive_packet_rdtsc(packet_t *packet) {
     // clear packet
@@ -31,12 +33,38 @@ void receive_packet_rdtsc(packet_t *packet) {
     // get packet from access times
     // usleep(0);
     // printf("%d", probe(ADDR(BASE_ADDR, 0, 0)) > 110); 
-    packet->raw[0] |= (probe(ADDR(BASE_ADDR, 0, 0)) > 110 ? 1 : 0);
-    for (int set = 1; set < 128; set++) {
-        // usleep(0);
-        // printf("%d", probe(ADDR(BASE_ADDR, set, 0)) > 55); // > 45); on bare
-        packet->raw[set / 8] |= ((probe(ADDR(BASE_ADDR, set, 0)) > 55 ? 1 : 0) << (set % 8));
+
+    // count
+    for (int i = 0; i < 8; i++) {
+        // evictions[0] += (probe(ADDR(BASE_ADDR, 0, 0)) > 110 ? 1 : 0);
+        for (int set = 0; set < 128; set++) {
+            evictions[set] += (probe(ADDR(BASE_ADDR, set, 0)) > 55 ? 1 : 0);
+        }
     }
+
+    // evaluate
+    // for (int set = 0; set < 8; set++) {
+    //     printf("%d\t", evictions[set]);
+    // }
+    // printf("\n");
+
+    // reset
+    for (int set = 0; set < 128; set++) {
+        packet->raw[set / 8] |= ((evictions[set] > 4 ? 1 : 0) << (set % 8));
+        evictions[set] = 0;
+    }
+
+    // for (int i = 0; i < 3; i++) {
+
+    //     packet->raw[0] |= (probe(ADDR(BASE_ADDR, 0, 0)) > 110 ? 1 : 0);
+    //     for (int set = 1; set < 128; set++) {
+    //         // usleep(0);
+    //         // printf("%d", probe(ADDR(BASE_ADDR, set, 0)) > 55); // > 45); on bare
+    //         packet->raw[set / 8] |= ((probe(ADDR(BASE_ADDR, set, 0)) > 55 ? 1 : 0) << (set % 8));
+    //     }
+
+    // }
+
     // for (int i = 0; i < PACKET_SIZE; i++) printf("%02X ", packet->raw[i]);
     // printf("\n");
 }
@@ -75,6 +103,13 @@ int main(int argc, char **argv) {
     while (1) {
         receive_packet_rdtsc(&packet);
 
+        // debug
+        if (args.verbose) {
+            printf("rcv: ");
+            for (int i = 0; i < PACKET_SIZE; i++) printf("%02X ", packet.raw[i]);
+            printf("\n");
+        }
+
         // data stop
         if (packet.header[0] == 0xEE && packet.header[1] == 0xFF && packet.header[2] == 0xFF) break;
 
@@ -87,21 +122,14 @@ int main(int argc, char **argv) {
         }
 
         // checksum
-        uint32_t checksum = 0;
+        uint32_t checksum = _mm_crc32_u8(0, packet.header[0]);
         for (int i = 0; i < PAYLOAD_SIZE; i++) {
             checksum = _mm_crc32_u8(checksum, packet.payload[i]);
         }
-        checksum >>= 24;
-        if (memcmp(&checksum, &packet.header[1], sizeof(uint8_t)) != 0) {
+        checksum >>= 16;
+        if (memcmp(&checksum, &packet.header[1], sizeof(uint16_t)) != 0) {
             // printf("corrupt crc32: %0X - \n", checksum);
             continue;
-        }
-
-        // debug
-        if (args.verbose) {
-            printf("rcv: ");
-            for (int i = 0; i < PACKET_SIZE; i++) printf("%02X ", packet.raw[i]);
-            printf("\n");
         }
 
         // all right!
