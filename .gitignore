@@ -16,6 +16,10 @@ src/sender/sender
 # misc
 .vscode
 
+# logging
+*.tmp
+*.csv
+
 # test files
 src/sender/pic.bmp
 src/sender/text.txt

@@ -16,6 +16,7 @@
 
 // packet definition
 typedef struct {
+    // data
     union {
         struct {
             uint8_t header[HEADER_SIZE];
@@ -24,6 +25,10 @@ typedef struct {
         uint8_t raw[PACKET_SIZE];
         uint64_t raw64[PACKET_SIZE / 8];
     };
+
+    // timestamps for logging
+    uint64_t start;
+    uint64_t end;
 } packet_t;
 
 #endif // PACKET_H

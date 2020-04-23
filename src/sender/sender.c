@@ -41,6 +41,7 @@ size_t send_packet(const uint8_t *payload, size_t length) {
     }
 
     // sender loop
+    packet.start = rdtsc();
     for (int i = 0; i < args.window; i++) {
         for (int set = TLB_SETS - 1; set >= 0; set--) { // from payload to header -> ensure that payload is complete!
             if (packet.raw[set / 8] & (1 << (set % 8))) {
@@ -52,6 +53,8 @@ size_t send_packet(const uint8_t *payload, size_t length) {
             }
         }
     }
+    packet.end = rdtsc();
+    record_packet(&packet); // logging
 
     return tosend;
 }
@@ -125,6 +128,9 @@ int main(int argc, char **argv) {
 
     // send data stop
     send_packet(NULL, 0);
+
+    // end logging
+    record_packet(NULL);
 
     // cleanup
     dealloc_mem(mem, mem_size);
