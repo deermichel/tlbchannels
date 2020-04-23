@@ -1,6 +1,7 @@
 #include <time.h>
 #include <x86intrin.h>
 #include "../asm.h"
+#include "../debug.h"
 #include "../memory.h"
 #include "../packet.h"
 #include "pteaccess/interface.h"
@@ -101,13 +102,12 @@ int main(int argc, char **argv) {
     uint32_t packets_received = 0;
     struct timespec first_packet_time, now;
     while (1) {
-        receive_packet_rdtsc(&packet);
+        receive_packet_pteaccess(&packet);
 
         // debug
         if (args.verbose) {
             printf("rcv: ");
-            for (int i = 0; i < PACKET_SIZE; i++) printf("%02X ", packet.raw[i]);
-            printf("\n");
+            print_packet(&packet);
         }
 
         // data stop

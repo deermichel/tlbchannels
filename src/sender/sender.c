@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <x86intrin.h>
 #include "../asm.h"
+#include "../debug.h"
 #include "../memory.h"
 #include "../packet.h"
 #include "cli.h"
@@ -36,8 +37,7 @@ size_t send_packet(const uint8_t *payload, size_t length) {
     // debug
     if (args.verbose) {
         printf("snd: ");
-        for (int i = 0; i < PACKET_SIZE; i++) printf("%02X ", packet.raw[i]);
-        printf("\n");
+        print_packet(&packet);
     }
 
     // sender loop
@@ -124,7 +124,7 @@ int main(int argc, char **argv) {
     }
 
     // send data stop
-    for (int i = 0; i < 100; i++) send_packet(NULL, 0);
+    send_packet(NULL, 0);
 
     // cleanup
     dealloc_mem(mem, mem_size);
