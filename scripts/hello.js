@@ -157,11 +157,16 @@ const run = async (sndFile, rcvFile, sndWindow, destDir) => {
         errorRate: 1 - (correctPackets / sndPackets.length),
     };
     writeFileSync(`${destDir}/results.json`, JSON.stringify(results, null, 4));
+    console.log("results:", results);
     console.log("results saved");
 
     return results;
 };
 
-for (let w = 0; w < 300; w += 10) {
-    run("data.txt", "out.txt", w, `${evalDir}/w${w}`);
+const runTuner = async () => {
+    for (let w = 1; w < 100; w += 1) {
+        await run("text.txt", "out.txt", w, `${evalDir}/w${w}`);
+    }
 }
+
+runTuner();
