@@ -1,0 +1,9 @@
+{
+  "name": "scripts",
+  "version": "1.0.0",
+  "author": "Micha Hanselmann",
+  "private": true,
+  "dependencies": {
+    "node-ssh": "^8.0.0"
+  }
+}

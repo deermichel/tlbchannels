@@ -9,6 +9,10 @@
 *.symvers
 *.d
 
+# node
+node_modules/
+package-lock.json
+
 # binaries
 src/receiver/receiver
 src/sender/sender
