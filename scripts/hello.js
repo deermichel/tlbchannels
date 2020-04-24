@@ -6,7 +6,8 @@ const exec = util.promisify(require("child_process").exec);
 const verbose = process.argv.includes("-v");
 const vm1address = "192.168.122.230";
 const vm2address = "192.168.122.206";
-const receiverTimeout = 1000; // ms
+const receiverTimeout = 60000; // ms
+const payloadSize = 13; // bytes
 
 const projectDir = `${process.env["HOME"]}/tlbchannels`;
 const senderDir = `${projectDir}/src/sender`;
@@ -18,8 +19,8 @@ const remoteDir = "/home/user";
 const parseLogfile = (csv) => {
     const rows = csv.split("\n").slice(0, -1).map((row) => row.split(","));
     const packets = rows.map(([start, end, data]) => ({ 
-        start, end, 
-        data: data.split(" ").slice(0, -1),
+        start, end, data,
+        // data: data.split(" ").slice(0, -1),
     }));
     return packets;
 };
@@ -62,11 +63,13 @@ const run = async () => {
 
     // execute binaries
     const killReceiver = setTimeout(() => vm1ssh.execCommand("pkill receiver"), receiverTimeout);
+    let transferDuration = "timeout";
     try {
         const [r1, r2] = await Promise.all([
-            vm1ssh.exec("./receiver", ["-v", "-o", "out.txt"], { cwd: remoteDir }),
-            vm2ssh.exec("./sender", ["-v", "-s", "Hello World Hello World Hello World"], { cwd: remoteDir }),
+            vm1ssh.exec("./receiver", ["-o", "out.bmp"], { cwd: remoteDir }),
+            vm2ssh.exec("./sender", ["-f", "pic.bmp", "-w 25"], { cwd: remoteDir }),
         ]);
+        transferDuration = parseFloat(r1.match(/time: (.*) s/)[1]);
         if (verbose) {
             console.log("--- receiver stdout ---");
             console.log(r1);
@@ -85,7 +88,7 @@ const run = async () => {
     clearInterval(killReceiver);
     console.log("binaries executed");
 
-    // retrieve logs
+    // retrieve logs (artifacts)
     await Promise.all([
         vm1ssh.getFile(`${evalDir}/rcv_packets_log.csv`, `${remoteDir}/packets_log.csv`),
         vm2ssh.getFile(`${evalDir}/snd_packets_log.csv`, `${remoteDir}/packets_log.csv`),
@@ -98,21 +101,54 @@ const run = async () => {
     console.log("ssh disconnected");
 
     // read logs
-    const [rcvLog, sndLog] = await Promise.all([
+    const [sndLog, rcvLog] = await Promise.all([
         readFile(`${evalDir}/snd_packets_log.csv`, "utf8"),
         readFile(`${evalDir}/rcv_packets_log.csv`, "utf8"),
     ]);
-    const sndPackets = parseLogfile(sndLog);
-    const rcvPackets = parseLogfile(rcvLog);
+    const sndPackets = parseLogfile(sndLog).map((packet) => packet.data);
+    const rcvPackets = parseLogfile(rcvLog).map((packet) => packet.data);
 
     // compare data
-    
+    let correctPackets = 0;
+    let lostPackets = 0;
+    let insertedPackets = 0;
+    let sndOffset = 0;
+    for (let rcvIndex = 0; rcvIndex < rcvPackets.length; rcvIndex++) {
+        // console.log(rcvIndex, rcvPackets.length);
+        const rcv = rcvPackets[rcvIndex];
+
+        let found = false;
+
+        for (let sndIndex = sndOffset; sndIndex < sndPackets.length; sndIndex++) {
+            const snd = sndPackets[sndIndex];
+
+            if (snd === rcv) {
+                lostPackets += sndIndex - sndOffset;
+                sndOffset = sndIndex + 1;
+                correctPackets++;
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) {
+            insertedPackets++;
+        }
+    }
+    lostPackets += sndPackets.length - sndOffset;
 
     // stats
     const stats = {
+        lostPackets, insertedPackets, transferDuration, correctPackets,
         sentPackets: sndPackets.length,
+        receivedPackets: rcvPackets.length,
+        sentBytes: sndPackets.length * payloadSize,
+        receivedBytes: rcvPackets.length * payloadSize,
+        bandwidth: ((correctPackets * payloadSize) / transferDuration) / 1000, // kB/s
+        // rawBandwidth: ((rcvPackets.length * payloadSize) / transferDuration) / 1000, // kB/s
+        errorRate: 1 - (correctPackets / sndPackets.length),
     };
-    console.log(stats);
+    console.log("stats:", stats);
 };
 
 run();

@@ -169,7 +169,7 @@ int main(int argc, char **argv) {
     double secs = now.tv_sec - first_packet_time.tv_sec + (double)(now.tv_nsec - first_packet_time.tv_nsec) / 1000000000;
     printf("received: %d (%d bytes)\n", packets_received, packets_received * PAYLOAD_SIZE);
     printf("bandwidth: %.3f kB/s\n", ((packets_received * PAYLOAD_SIZE) / secs) / 1000.0);
-    printf("time: %.3f s\n", secs);
+    printf("time: %f s\n", secs);
 
     // cleanup
     fclose(output);
