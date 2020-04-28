@@ -23,6 +23,7 @@ src/sender/sender
 # logging
 *.tmp
 *.csv
+eval/
 
 # test files
 src/sender/pic.bmp
