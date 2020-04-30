@@ -16,17 +16,21 @@ static char doc[] = "receiver for tlb-based covert channels";
 // cli args docs
 static struct argp_option options[] = {
     { "output", 'o', "FILE", 0, "write received payload to the specified file" },
-    { "window", 'w', "NUMBER", 0, "set receiver window (iterations per packet)" },
+    { "window", 'w', "NUMBER", 0, "set receiver window (iterations per packet) - only for rdtsc probing" },
     { "verbose", 'v', 0, 0, "produce verbose output" },
+    { "rdtsc", 'r', "NUMBER", 0, "use rdtsc probing (with threshold)" },
 };
 
 // cli args struct
 static struct {
+    enum { MODE_PROBE_PTEACCESS, MODE_PROBE_RDTSC } mode;
     bool verbose;
     int window;
     const char *filename;
+    int rdtsc_threshold;
 } args = { 
     // defaults
+    .mode = MODE_PROBE_PTEACCESS,
     .verbose = false,
     .window = 1000,
     .filename = NULL,
@@ -38,6 +42,9 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state) {
         case 'o':
             args.filename = arg;
             break;
+        case 'r':
+            args.mode = MODE_PROBE_RDTSC;
+            args.rdtsc_threshold = atoi(arg);
         case 'v':
             args.verbose = true;
             break;

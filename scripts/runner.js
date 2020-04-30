@@ -8,7 +8,7 @@ const exec = util.promisify(require("child_process").exec);
 const verbose = process.argv.includes("-v");
 const vm1address = "192.168.122.230";
 const vm2address = "192.168.122.206";
-const receiverTimeout = 2000; // ms
+const receiverTimeout = 5000; // ms
 const payloadSize = 13; // bytes
 
 const projectDir = `${process.env["HOME"]}/tlbchannels`;
@@ -179,14 +179,13 @@ const main = async () => {
     await compileAndCopy();
 
     const results = [];
-    const goodWindow = 22;
-    for (let w = goodWindow; w < goodWindow + 1; w += 1) {
-        for (let r = 0; r < 3; r++) {
+    for (let w = 10; w < 50; w += 10) {
+        for (let r = 0; r < 2; r++) {
             results.push(await run("text.txt", "out.txt", w, `${evalDir}/w${w}_r${r}`));
         }
     }
     results.sort((r1, r2) => r2.bandwidth - r1.bandwidth);
-    console.log(results.map(({ sndWindow, bandwidth, errorRate }) => ({ sndWindow, bandwidth, errorRate })));
+    console.log(results.slice(0, 3));
 
     await disconnect();
 }
