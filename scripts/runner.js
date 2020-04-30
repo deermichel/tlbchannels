@@ -17,6 +17,8 @@ const receiverDir = `${projectDir}/src/receiver`;
 const evalDir = `${projectDir}/eval`;
 const remoteDir = "/home/user";
 
+let vm1ssh, vm2ssh;
+
 // parse csv logfile
 const parseLogfile = (csv) => {
     const rows = csv.split("\n").slice(0, -1).map((row) => row.split(","));
@@ -27,10 +29,8 @@ const parseLogfile = (csv) => {
     return packets;
 };
 
-const run = async (sndFile, rcvFile, sndWindow, destDir) => {
-    console.log(`[sndFile: ${sndFile} | rcvFile: ${rcvFile} | sndWindow: ${sndWindow}]`);
-    mkdirSync(destDir, { recursive: true });
-
+// compile locally and copy binaries
+const compileAndCopy = async () => {
     // compile
     const [m1, m2] = await Promise.all([
         exec("make", { cwd: senderDir }),
@@ -42,9 +42,18 @@ const run = async (sndFile, rcvFile, sndWindow, destDir) => {
     }
     console.log("compiled");
 
-    // connect
-    const vm1ssh = new node_ssh();
-    const vm2ssh = new node_ssh();
+    // copy binaries
+    await Promise.all([
+        vm1ssh.putFile(`${receiverDir}/receiver`, `${remoteDir}/receiver`),
+        vm2ssh.putFile(`${senderDir}/sender`, `${remoteDir}/sender`),
+    ]);
+    console.log("binaries copied");
+};
+
+// connect to vms
+const connect = async () => {
+    vm1ssh = new node_ssh();
+    vm2ssh = new node_ssh();
     await Promise.all([
         vm1ssh.connect({
             host: vm1address,
@@ -58,13 +67,19 @@ const run = async (sndFile, rcvFile, sndWindow, destDir) => {
         }),
     ]);
     console.log("ssh connected");
+};
 
-    // copy binaries
-    await Promise.all([
-        vm1ssh.putFile(`${receiverDir}/receiver`, `${remoteDir}/receiver`),
-        vm2ssh.putFile(`${senderDir}/sender`, `${remoteDir}/sender`),
-    ]);
-    console.log("binaries copied");
+// disconnect ssh
+const disconnect = async () => {
+    vm1ssh.dispose();
+    vm2ssh.dispose();
+    console.log("ssh disconnected");
+}
+
+// run config and evaluate results
+const run = async (sndFile, rcvFile, sndWindow, destDir) => {
+    console.log(`[sndFile: ${sndFile} | rcvFile: ${rcvFile} | sndWindow: ${sndWindow}]`);
+    mkdirSync(destDir, { recursive: true });
 
     // execute binaries
     const killReceiver = setTimeout(() => vm1ssh.execCommand("pkill receiver"), receiverTimeout);
@@ -101,11 +116,6 @@ const run = async (sndFile, rcvFile, sndWindow, destDir) => {
         // vm2ssh.getFile(`${destDir}/${sndFile}`, `${remoteDir}/${sndFile}`),
     ]);
     console.log("retrieved artifacts");
-
-    // disconnect
-    vm1ssh.dispose();
-    vm2ssh.dispose();
-    console.log("ssh disconnected");
 
     // read logs
     const [sndLog, rcvLog] = await Promise.all([
@@ -163,15 +173,22 @@ const run = async (sndFile, rcvFile, sndWindow, destDir) => {
     return results;
 };
 
-const runTuner = async () => {
+// entry point
+const main = async () => {
+    await connect();
+    await compileAndCopy();
+
     const results = [];
-    for (let w = 10; w < 12; w += 1) {
-        for (let r = 0; r < 2; r++) {
+    const goodWindow = 22;
+    for (let w = goodWindow; w < goodWindow + 1; w += 1) {
+        for (let r = 0; r < 3; r++) {
             results.push(await run("text.txt", "out.txt", w, `${evalDir}/w${w}_r${r}`));
         }
     }
     results.sort((r1, r2) => r2.bandwidth - r1.bandwidth);
-    console.log(results);
+    console.log(results.map(({ sndWindow, bandwidth, errorRate }) => ({ sndWindow, bandwidth, errorRate })));
+
+    await disconnect();
 }
 
-runTuner();
+main();
