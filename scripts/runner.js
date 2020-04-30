@@ -8,7 +8,7 @@ const exec = util.promisify(require("child_process").exec);
 const verbose = process.argv.includes("-v");
 const vm1address = "192.168.122.230";
 const vm2address = "192.168.122.206";
-const receiverTimeout = 10000; // ms
+const receiverTimeout = 2000; // ms
 const payloadSize = 13; // bytes
 
 const projectDir = `${process.env["HOME"]}/tlbchannels`;
@@ -157,16 +157,21 @@ const run = async (sndFile, rcvFile, sndWindow, destDir) => {
         errorRate: 1 - (correctPackets / sndPackets.length),
     };
     writeFileSync(`${destDir}/results.json`, JSON.stringify(results, null, 4));
-    console.log("results:", results);
+    if (verbose) console.log("results:", results);
     console.log("results saved");
 
     return results;
 };
 
 const runTuner = async () => {
-    for (let w = 1; w < 100; w += 1) {
-        await run("text.txt", "out.txt", w, `${evalDir}/w${w}`);
+    const results = [];
+    for (let w = 10; w < 12; w += 1) {
+        for (let r = 0; r < 2; r++) {
+            results.push(await run("text.txt", "out.txt", w, `${evalDir}/w${w}_r${r}`));
+        }
     }
+    results.sort((r1, r2) => r2.bandwidth - r1.bandwidth);
+    console.log(results);
 }
 
 runTuner();
