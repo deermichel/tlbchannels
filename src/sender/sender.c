@@ -127,7 +127,7 @@ int main(int argc, char **argv) {
     }
 
     // send data stop
-    send_packet(NULL, 0);
+    for (int i = 0; i < 100; i++) send_packet(NULL, 0);
 
     // end logging
     record_packet(NULL);

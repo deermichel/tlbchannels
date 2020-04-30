@@ -33,7 +33,8 @@ void receive_packet_rdtsc(packet_t *packet) {
 
     // evaluate and write packet
     for (int set = 0; set < TLB_SETS; set++) {
-        packet->raw[set / 8] |= ((evictions[set] > (args.window / 2) ? 1 : 0) << (set % 8));
+        // packet->raw[set / 8] |= ((evictions[set] > (args.window / 2) ? 1 : 0) << (set % 8));
+        packet->raw[set / 8] |= ((evictions[set] > args.evic_threshold ? 1 : 0) << (set % 8));
     }
 }
 
@@ -70,8 +71,8 @@ int main(int argc, char **argv) {
     struct timespec first_packet_time, now;
     while (1) {
         // read raw packet
-        memset(packet->raw, 0x00, PACKET_SIZE); // reset
-        packet->start = rdtsc(); // log start tsc
+        memset(packet.raw, 0x00, PACKET_SIZE); // reset
+        packet.start = rdtsc(); // log start tsc
         switch (args.mode) {
             case MODE_PROBE_PTEACCESS:
                 receive_packet_pteaccess(&packet);
@@ -80,13 +81,7 @@ int main(int argc, char **argv) {
                 receive_packet_rdtsc(&packet);
                 break;
         }
-        packet->end = rdtsc(); // log end tsc
-
-        // debug
-        if (args.verbose) {
-            printf("rcv: ");
-            print_packet(&packet);
-        }
+        packet.end = rdtsc(); // log end tsc
 
         // data stop
         if (packet.header[0] == 0xEE && packet.header[1] == 0xFF && packet.header[2] == 0xFF) break;
@@ -108,6 +103,12 @@ int main(int argc, char **argv) {
         if (memcmp(&checksum, &packet.header[1], sizeof(uint16_t)) != 0) {
             // printf("corrupt crc32: %0X - \n", checksum);
             continue;
+        }
+
+        // debug
+        if (args.verbose) {
+            printf("rcv: ");
+            print_packet(&packet);
         }
 
         // all right!
