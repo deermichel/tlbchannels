@@ -16,7 +16,7 @@ static char doc[] = "receiver for tlb-based covert channels";
 // cli args docs
 static struct argp_option options[] = {
     { "output", 'o', "FILE", 0, "write received payload to the specified file" },
-    { "window", 'w', "NUMBER", 0, "set receiver window (iterations per packet) - only for rdtsc probing" },
+    { "window", 'w', "NUMBER[,NUMBER]", 0, "set receiver window (iterations per packet) and optional evictions threshold - only for rdtsc probing" },
     { "verbose", 'v', 0, 0, "produce verbose output" },
     { "rdtsc", 'r', "NUMBER", 0, "use rdtsc probing (with threshold)" },
 };
