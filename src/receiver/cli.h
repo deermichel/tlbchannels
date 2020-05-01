@@ -26,18 +26,21 @@ static struct {
     enum { MODE_PROBE_PTEACCESS, MODE_PROBE_RDTSC } mode;
     bool verbose;
     int window;
+    int window_threshold;
     const char *filename;
     int rdtsc_threshold;
 } args = { 
     // defaults
     .mode = MODE_PROBE_PTEACCESS,
     .verbose = false,
-    .window = 1000,
+    .window = 8,
+    .window_threshold = 3,
     .filename = NULL,
 };
 
 // cli args parser
 static error_t parse_opt (int key, char *arg, struct argp_state *state) {
+    char *token;
     switch (key) {
         case 'o':
             args.filename = arg;
@@ -45,11 +48,15 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state) {
         case 'r':
             args.mode = MODE_PROBE_RDTSC;
             args.rdtsc_threshold = atoi(arg);
+            break;
         case 'v':
             args.verbose = true;
             break;
         case 'w':
-            args.window = atoi(arg);
+            token = strtok(arg, ",");
+            args.window = atoi(token);
+            token = strtok(NULL, ",");
+            args.window_threshold = (token) ? atoi(token) : (args.window / 2);
             break;
         default:
             return ARGP_ERR_UNKNOWN;

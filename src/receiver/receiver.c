@@ -33,8 +33,7 @@ void receive_packet_rdtsc(packet_t *packet) {
 
     // evaluate and write packet
     for (int set = 0; set < TLB_SETS; set++) {
-        // packet->raw[set / 8] |= ((evictions[set] > (args.window / 2) ? 1 : 0) << (set % 8));
-        packet->raw[set / 8] |= ((evictions[set] > args.evic_threshold ? 1 : 0) << (set % 8));
+        packet->raw[set / 8] |= ((evictions[set] > args.window_threshold ? 1 : 0) << (set % 8));
     }
 }
 
