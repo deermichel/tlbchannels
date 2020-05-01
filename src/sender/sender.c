@@ -116,6 +116,13 @@ int main(int argc, char **argv) {
     const size_t mem_size = ADDR(0, 0, 16); // to address all sets with up to 16 ways (wasteful!)
     uint8_t *mem = alloc_mem(BASE_ADDR, mem_size);
 
+    // touch pages to create pte, prevent page faults during sending (-> zero-page mapping)
+    for (int set = 0; set < TLB_SETS; set++) {
+        for (int way = 0; way < 16; way++) {
+            TOUCH_MEMORY(ADDR(BASE_ADDR, set, way));
+        }
+    }
+
     // send data
     switch (args.mode) {
         case MODE_SEND_STRING:
