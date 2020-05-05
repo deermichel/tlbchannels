@@ -26,5 +26,6 @@ src/sender/sender
 eval/
 
 # test files
+src/receiver/out.bmp
 src/sender/pic.bmp
 src/sender/text.txt
