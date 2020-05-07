@@ -83,20 +83,50 @@ int main(int argc, char **argv) {
         packet.end = rdtsc(); // log end tsc
 
         // data stop
-        if (packet.header[0] == 0xEE && packet.header[1] == 0xFF && packet.header[2] == 0xFF) break;
+        // if (packet.header[0] == 0xEE && packet.header[1] == 0xFF && packet.header[2] == 0xFF) break;
+        static uint8_t endcount = 0;
+        if (packet.header[0] == 0xEE && packet.payload[0] == 0xFF && packet.payload[1] == 0xFF) {
+            endcount++;
+            if (endcount == 20) {
+                break;
+            }
+        };
 
-        // check header
-        if ((packet.header[0] & 0xF0) != 0x60) {
-            // printf("corrupt header -\n\n");
+        // checksum
+        uint8_t should = packet.header[0] >> 1;
+
+        packet.header[0] = packet.header[0] & 0x01;
+        uint8_t zeros = 0;
+        for (int i = 0; i < PACKET_SIZE / 8; i++) {
+            zeros += _mm_popcnt_u64(~packet.raw64[i]);
+        }
+        if (zeros != should) {
+            // printf("corrupt chksum -\n\n");
             continue;
         }
-        uint8_t seq = (packet.header[0] & 0x01);
+
+        // seq
+        uint8_t seq = packet.header[0] & 0x01;
+        packet.header[0] |= (zeros << 1);
         static uint8_t last_seq = (uint8_t)-1;
         if (seq == last_seq) {
             // printf("same seq -\n\n");
             continue;
         }
         last_seq = seq;
+
+        // check header
+        // if ((packet.header[0] & 0xF0) != 0x60) {
+        //     // printf("corrupt header -\n\n");
+        //     continue;
+        // }
+        // uint8_t seq = (packet.header[0] & 0x01);
+        // static uint8_t last_seq = (uint8_t)-1;
+        // if (seq == last_seq) {
+        //     // printf("same seq -\n\n");
+        //     continue;
+        // }
+        // last_seq = seq;
 
         // static uint8_t next_sqn = 0;
         // uint8_t expected_header = 0xD0 | (next_sqn % 4);

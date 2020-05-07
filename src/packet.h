@@ -23,6 +23,7 @@ typedef struct {
             uint8_t payload[PAYLOAD_SIZE];
         };
         uint8_t raw[PACKET_SIZE];
+        uint64_t raw64[PACKET_SIZE / 8];
     };
 
     // timestamps for logging
