@@ -24,15 +24,7 @@ size_t send_packet(const uint8_t *payload, size_t length) {
 
         // header
         static uint8_t sqn = 0;
-        packet.header[0] = 0xD0 | (sqn++ % 4);
-
-        // crc32
-        uint32_t checksum = _mm_crc32_u8(0, packet.header[0]);
-        for (int i = 0; i < PAYLOAD_SIZE; i++) {
-            checksum = _mm_crc32_u8(checksum, packet.payload[i]);
-        }
-        checksum >>= 16;
-        memcpy(&packet.header[1], &checksum, sizeof(uint16_t));
+        packet.header[0] = 0x60 | (sqn++ % 2);
     }
 
     // debug
@@ -148,6 +140,7 @@ int main(int argc, char **argv) {
     clock_gettime(CLOCK_MONOTONIC, &end_time);
 
     // send data stop
+    // send_packet(NULL, 0);
     for (int i = 0; i < 100; i++) send_packet(NULL, 0);
 
     // end logging

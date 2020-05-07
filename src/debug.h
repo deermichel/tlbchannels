@@ -13,7 +13,7 @@
 #define LOG_FILENAME "packets_log"
 
 // log buffer size (packets)
-#define LOG_BUFFER_SIZE 10000
+#define LOG_BUFFER_SIZE 20000
 
 // print packet to console
 void print_packet(packet_t *packet) {

@@ -86,6 +86,18 @@ int main(int argc, char **argv) {
         if (packet.header[0] == 0xEE && packet.header[1] == 0xFF && packet.header[2] == 0xFF) break;
 
         // check header
+        if ((packet.header[0] & 0xF0) != 0x60) {
+            // printf("corrupt header -\n\n");
+            continue;
+        }
+        uint8_t seq = (packet.header[0] & 0x01);
+        static uint8_t last_seq = (uint8_t)-1;
+        if (seq == last_seq) {
+            // printf("same seq -\n\n");
+            continue;
+        }
+        last_seq = seq;
+
         // static uint8_t next_sqn = 0;
         // uint8_t expected_header = 0xD0 | (next_sqn % 4);
         // if (packet.header[0] != expected_header) {
@@ -96,28 +108,28 @@ int main(int argc, char **argv) {
         // print_packet(&packet);
 
         // checksum
-        uint32_t checksum = _mm_crc32_u8(0, packet.header[0]);
-        for (int i = 0; i < PAYLOAD_SIZE; i++) {
-            checksum = _mm_crc32_u8(checksum, packet.payload[i]);
-        }
-        checksum >>= 16;
-        if (memcmp(&checksum, &packet.header[1], sizeof(uint16_t)) != 0) {
-            // printf("corrupt crc32: %0X\n\n", checksum);
-            continue;
-        }
+        // uint32_t checksum = _mm_crc32_u8(0, packet.header[0]);
+        // for (int i = 0; i < PAYLOAD_SIZE; i++) {
+        //     checksum = _mm_crc32_u8(checksum, packet.payload[i]);
+        // }
+        // checksum >>= 16;
+        // if (memcmp(&checksum, &packet.header[1], sizeof(uint16_t)) != 0) {
+        //     // printf("corrupt crc32: %0X\n\n", checksum);
+        //     continue;
+        // }
 
         // check seq
-        static uint8_t last_seq = (uint8_t)-1;
-        if ((packet.header[0] & 0xF0) != 0xD0) {
-            // printf("corrupt header -\n\n");
-            continue;
-        }
-        // if (packet.header[0] == 0) continue;
-        if ((packet.header[0] & 0x0F) == last_seq) {
-            // printf("same seq -\n\n");
-            continue;
-        }
-        last_seq = packet.header[0] & 0x0F;
+        // static uint8_t last_seq = (uint8_t)-1;
+        // if ((packet.header[0] & 0xF0) != 0xD0) {
+        //     // printf("corrupt header -\n\n");
+        //     continue;
+        // }
+        // // if (packet.header[0] == 0) continue;
+        // if ((packet.header[0] & 0x0F) == last_seq) {
+        //     // printf("same seq -\n\n");
+        //     continue;
+        // }
+        // last_seq = packet.header[0] & 0x0F;
 
         // debug
         if (args.verbose) {
@@ -132,6 +144,7 @@ int main(int argc, char **argv) {
         // count packets
         packets_received++;
         if (packets_received == 1) clock_gettime(CLOCK_MONOTONIC, &first_packet_time);
+        // if (packets_received == 200) break;
 
         // save to buffer
         memcpy(buffer + offset, packet.payload, PAYLOAD_SIZE);

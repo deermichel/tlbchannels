@@ -200,7 +200,8 @@ const main = async () => {
     //     }
     // }
     // results.push(await run("text.txt", "out.txt", 45, 8, 3, `${evalDir}/out`));
-    results.push(await run("text.txt", "out.txt", 19, 8, 3, `${evalDir}/out`));
+    results.push(await run("text.txt", "out.txt", 19, 8, 4, `${evalDir}/out`));
+    // results.push(await run("pic.bmp", "out.bmp", 19, 8, 3, `${evalDir}/out`));
     // results.push(await run("text.txt", "out.txt", 28, 9, 3, `${evalDir}/out`));
     // for (let sw = 23; sw <= 31; sw+=2) {
     //     results.push(await run("text.txt", "out.txt", sw, 8, 3, `${evalDir}/sw_${sw}`));
