@@ -34,7 +34,7 @@ static struct {
     .mode = MODE_PROBE_PTEACCESS,
     .verbose = false,
     .window = 8,
-    .window_threshold = 3,
+    .window_threshold = 4,
     .filename = NULL,
 };
 

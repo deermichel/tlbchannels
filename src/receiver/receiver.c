@@ -18,7 +18,7 @@ void receive_packet_pteaccess(packet_t *packet) {
     }
 
     // get packet from access bits
-    pread(pteaccess_fd, packet->raw, PACKET_SIZE, 0);
+    pteaccess_get_bits(packet->raw, PACKET_SIZE);
 }
 
 // receive packet via timestamps
@@ -33,7 +33,7 @@ void receive_packet_rdtsc(packet_t *packet) {
 
     // evaluate and write packet
     for (int set = 0; set < TLB_SETS; set++) {
-        packet->raw[set / 8] |= ((evictions[set] > args.window_threshold ? 1 : 0) << (set % 8));
+        packet->raw[set / 8] |= ((evictions[set] >= args.window_threshold ? 1 : 0) << (set % 8));
     }
 }
 
