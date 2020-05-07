@@ -8,8 +8,8 @@ const exec = util.promisify(require("child_process").exec);
 const verbose = process.argv.includes("-v");
 const vm1address = "192.168.122.230";
 const vm2address = "192.168.122.206";
-const receiverTimeout = 10000; // ms
-const payloadSize = 13; // bytes
+const receiverTimeout = 5000; // ms
+const payloadSize = 15; // bytes
 
 const projectDir = `${process.env["HOME"]}/tlbchannels`;
 const senderDir = `${projectDir}/src/sender`;
@@ -77,8 +77,8 @@ const disconnect = async () => {
 }
 
 // run config and evaluate results
-const run = async (sndFile, rcvFile, sndWindow, rcvWindow, rcvThreshold, destDir) => {
-    console.log(`[sndFile: ${sndFile} | rcvFile: ${rcvFile} | sndWindow: ${sndWindow}] | rcvWindow: ${rcvWindow} | rcvThreshold: ${rcvThreshold}]`);
+const run = async (sndFile, rcvFile, sndArgs, rcvArgs, destDir) => {
+    console.log(`[sndFile: ${sndFile} | rcvFile: ${rcvFile} | sndArgs: ${sndArgs} | rcvArgs: ${rcvArgs}]`);
     mkdirSync(destDir, { recursive: true });
 
     // execute binaries
@@ -87,9 +87,8 @@ const run = async (sndFile, rcvFile, sndWindow, rcvWindow, rcvThreshold, destDir
     let sendDuration = "timeout";
     try {
         const [r1, r2] = await Promise.all([
-            // vm1ssh.exec("./receiver", ["-o", rcvFile, `-w ${rcvWindow},${rcvThreshold}`, "-r 54"], { cwd: remoteDir }),
-            vm1ssh.exec("./receiver", ["-o", rcvFile], { cwd: remoteDir }),
-            vm2ssh.exec("./sender", ["-f", sndFile, "-w", sndWindow], { cwd: remoteDir }),
+            vm1ssh.exec("./receiver", ["-o", rcvFile, rcvArgs], { cwd: remoteDir }),
+            vm2ssh.exec("./sender", ["-f", sndFile, sndArgs], { cwd: remoteDir }),
         ]);
         transferDuration = parseFloat(r1.match(/time: (.*) s/)[1]);
         sendDuration = parseFloat(r2.match(/time: (.*) s/)[1]);
@@ -159,7 +158,7 @@ const run = async (sndFile, rcvFile, sndWindow, rcvWindow, rcvThreshold, destDir
 
     // results
     const results = {
-        sndFile, rcvFile, sndWindow, rcvWindow, rcvThreshold,
+        sndFile, rcvFile, sndArgs, rcvArgs,
         lostPackets, insertedPackets, transferDuration, sendDuration, correctPackets,
         sentPackets: sndPackets.length,
         receivedPackets: rcvPackets.length,
@@ -167,7 +166,7 @@ const run = async (sndFile, rcvFile, sndWindow, rcvWindow, rcvThreshold, destDir
         receivedBytes: rcvPackets.length * payloadSize,
         bandwidth: ((correctPackets * payloadSize) / transferDuration) / 1000, // kB/s
         maxBandwidth: ((sndPackets.length * payloadSize) / sendDuration) / 1000, // kB/s
-        // rawBandwidth: ((rcvPackets.length * payloadSize) / transferDuration) / 1000, // kB/s
+        rawBandwidth: ((rcvPackets.length * payloadSize) / transferDuration) / 1000, // kB/s
         errorRate: 1 - (correctPackets / sndPackets.length),
     };
     writeFileSync(`${destDir}/results.json`, JSON.stringify(results, null, 4));
@@ -200,14 +199,33 @@ const main = async () => {
     //     }
     // }
     // results.push(await run("text.txt", "out.txt", 45, 8, 3, `${evalDir}/out`));
-    results.push(await run("text.txt", "out.txt", 19, 8, 4, `${evalDir}/out`));
+
+    const files = [
+        { snd: "json.h", rcv: "out.h" },
+        // { snd: "text.txt", rcv: "out.txt" },
+    ];
+    const configs = [
+        { snd: "-w 15", rcv: "-r 54 -w 3,2" },
+        { snd: "-w 20", rcv: "-r 54 -w 8,4" },
+        { snd: "-w 14", rcv: "" },
+    ];
+
+    for ({ snd: sndFile, rcv: rcvFile } of files) {
+        for ({ snd: sndArgs, rcv: rcvArgs } of configs) {
+            results.push(await run(sndFile, rcvFile, sndArgs, rcvArgs, `${evalDir}/out`));
+        }
+    }
+
+    // results.push(await run("json.h", "out.h", 15, 8, 4, `${evalDir}/out`));
+    // results.push(await run("text.txt", "out.txt", 15, 8, 4, `${evalDir}/out`));
+    // results.push(await run("text.txt", "out.txt", 14, 8, 4, `${evalDir}/out`));
     // results.push(await run("pic.bmp", "out.bmp", 19, 8, 3, `${evalDir}/out`));
     // results.push(await run("text.txt", "out.txt", 28, 9, 3, `${evalDir}/out`));
     // for (let sw = 23; sw <= 31; sw+=2) {
     //     results.push(await run("text.txt", "out.txt", sw, 8, 3, `${evalDir}/sw_${sw}`));
     // }
     results = results.filter((r) => !isNaN(r.bandwidth));
-    results.sort((r1, r2) => r1.bandwidth - r2.bandwidth);
+    // results.sort((r1, r2) => r1.bandwidth - r2.bandwidth);
     console.log(results.slice(0, 25)); //.map((r) => `${r.rcvThreshold} b: ${r.bandwidth} e: ${r.errorRate}`));
 
     await disconnect();
