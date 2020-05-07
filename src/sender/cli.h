@@ -19,6 +19,7 @@ static struct argp_option options[] = {
     { "file", 'f', "FILE", 0, "send the specified file" },
     { "window", 'w', "NUMBER", 0, "set sender window (iterations per packet)" },
     { "verbose", 'v', 0, 0, "produce verbose output" },
+    { 0 },
 };
 
 // cli args struct

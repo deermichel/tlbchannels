@@ -19,6 +19,7 @@ static struct argp_option options[] = {
     { "window", 'w', "NUMBER[,NUMBER]", 0, "set receiver window (iterations per packet) and optional evictions threshold - only for rdtsc probing" },
     { "verbose", 'v', 0, 0, "produce verbose output" },
     { "rdtsc", 'r', "NUMBER", 0, "use rdtsc probing (with threshold)" },
+    { 0 },
 };
 
 // cli args struct
