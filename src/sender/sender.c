@@ -14,7 +14,7 @@
 size_t send_packet(const uint8_t *payload, size_t length) {
     // prepare packet
     size_t tosend = (length > PAYLOAD_SIZE) ? PAYLOAD_SIZE : length;
-    packet_t packet;
+    packet_t packet, tempacket;
     memset(packet.raw, 0xFF, PACKET_SIZE);
 
     // pack data
@@ -24,9 +24,8 @@ size_t send_packet(const uint8_t *payload, size_t length) {
         memcpy(packet.payload, payload, tosend);
 
         // header
-        packet.header[0] = 0x00;
-        // static uint8_t sqn = 0;
-        // packet.header[0] = (sqn++ % 2);
+        static uint8_t sqn = 0;
+        packet.header[0] = (sqn++ % 2);
 
         // // checksum
         // uint8_t zeros = 0;
@@ -43,12 +42,8 @@ size_t send_packet(const uint8_t *payload, size_t length) {
     }
 
     // hamming
-    if (payload != NULL) record_packet(&packet); // logging
-    for (int i = 0; i < 8; i++) {
-        uint16_t hamming = enc8_16(packet.raw[i]);
-        packet.raw[i] = hamming & 0x00FF;
-        packet.raw[i+8] = (hamming & 0xFF00) >> 8;
-    }
+    tempacket = packet;
+    encode_8_4(&packet);
 
     // debug after
     if (args.verbose) {
@@ -58,7 +53,7 @@ size_t send_packet(const uint8_t *payload, size_t length) {
     }
 
     // sender loop
-    // packet.start = rdtsc();
+    tempacket.start = rdtsc();
     for (int i = 0; i < args.window; i++) {
         for (int set = 0; set < TLB_SETS; set++) {
             if (packet.raw[set / 8] & (1 << (set % 8))) {
@@ -70,8 +65,8 @@ size_t send_packet(const uint8_t *payload, size_t length) {
             }
         }
     }
-    // packet.end = rdtsc();
-    if (payload != NULL) record_packet(&packet); // logging
+    tempacket.end = rdtsc();
+    if (payload != NULL) record_packet(&tempacket); // logging
 
     return tosend;
 }
@@ -164,8 +159,8 @@ int main(int argc, char **argv) {
     clock_gettime(CLOCK_MONOTONIC, &end_time);
 
     // send data stop
-    send_packet(NULL, 0);
-    // for (int i = 0; i < 1000; i++) send_packet(NULL, 0);
+    // send_packet(NULL, 0);
+    for (int i = 0; i < 1000; i++) send_packet(NULL, 0);
 
     // end logging
     record_packet(NULL);

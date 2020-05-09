@@ -2,6 +2,7 @@
 #include <x86intrin.h>
 #include "../asm.h"
 #include "../debug.h"
+#include "../hamming.h"
 #include "../memory.h"
 #include "../packet.h"
 #include "pteaccess/interface.h"
@@ -89,13 +90,13 @@ int main(int argc, char **argv) {
 
         // data stop
         // if (packet.header[0] == 0xEE && packet.header[1] == 0xFF && packet.header[2] == 0xFF) break;
-        static uint8_t endcount = 0;
-        if (packet.header[0] == 0xEE && packet.payload[0] == 0xFF && packet.payload[1] == 0xFF) {
-            endcount++;
-            if (endcount == 20) {
-                break;
-            }
-        };
+        // static uint8_t endcount = 0;
+        // if (packet.header[0] == 0xEE && packet.payload[0] == 0xFF && packet.payload[1] == 0xFF) {
+        //     endcount++;
+        //     if (endcount == 20) {
+        //         break;
+        //     }
+        // };
 
         // if (packet.payload[0] == 0) continue;
 
@@ -169,14 +170,44 @@ int main(int argc, char **argv) {
         // last_seq = packet.header[0] & 0x0F;
 
         // debug
-        if (args.verbose) {
-            printf("rcv: ");
-            print_packet(&packet);
+        // if (args.verbose) {
+        //     printf("brcv: ");
+        //     print_packet(&packet);
+        // }
+
+        // hamming
+        if (decode_8_4(&packet) == 0) continue;
+        // record_packet(&packet); // logging
+
+        // data stop
+        static uint8_t endcount = 0;
+        if (packet.header[0] == 0xEE && packet.payload[0] == 0xFF && packet.payload[1] == 0xFF) {
+            endcount++;
+            if (endcount == 20) {
+                break;
+            }
+        };
+
+        // seq
+        if (packet.header[0] != 0x01 && packet.header[0] != 0x00) continue; // header
+        uint8_t seq = packet.header[0] & 0x01;
+        static uint8_t last_seq = (uint8_t)-1;
+        if (seq == last_seq) {
+            // printf("same seq -\n\n");
+            continue;
         }
+        last_seq = seq;
 
         // all right!
         record_packet(&packet); // logging
         // next_sqn++;
+
+        // debug
+        if (args.verbose) {
+            printf("arcv: ");
+            print_packet(&packet);
+            printf("\n");
+        }
 
         // count packets
         packets_received++;

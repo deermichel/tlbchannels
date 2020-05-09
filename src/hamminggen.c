@@ -46,18 +46,18 @@ void gendec() {
                 // parity defect
                 // printf("0x%02X \t ---- \t pdef \t %d \n", d, data);
             }
-            printf("0x%02XFF, ", data);
+            printf("0x%02X, ", data);
 
         } else {
             if (p3 == 0) {
                 // 2bit error
                 // printf("0x%02X \t ---- \t ---- \n", d);
-                printf("0x0000, ");
+                printf("0xFF, ");
             } else {
                 // 1bit error
                 int corr = d ^ (1 << (8 - syn));
                 int data = (((corr >> 5) & 1) << 3) | ((corr >> 1) & 7);
-                printf("0x%02XFF, ", data);
+                printf("0x%02X, ", data);
                 // printf("0x%02X \t 0x%02X \t corr \t %d \n", d, corr, data);
             }
 
