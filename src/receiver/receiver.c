@@ -188,9 +188,18 @@ int main(int argc, char **argv) {
             }
         };
 
+        // checksum
+        uint8_t should = packet.header[0] >> 1;
+        packet.header[0] = packet.header[0] & 0x01;
+        uint8_t zeros = _mm_popcnt_u64(~packet.raw64[0]);
+        if (zeros != should) {
+            // printf("corrupt chksum -\n\n");
+            continue;
+        }
+
         // seq
-        if (packet.header[0] != 0x01 && packet.header[0] != 0x00) continue; // header
         uint8_t seq = packet.header[0] & 0x01;
+        packet.header[0] |= (zeros << 1);
         static uint8_t last_seq = (uint8_t)-1;
         if (seq == last_seq) {
             // printf("same seq -\n\n");

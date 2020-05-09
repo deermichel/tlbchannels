@@ -27,16 +27,14 @@ size_t send_packet(const uint8_t *payload, size_t length) {
         static uint8_t sqn = 0;
         packet.header[0] = (sqn++ % 2);
 
-        // // checksum
-        // uint8_t zeros = 0;
-        // for (int i = 0; i < PACKET_SIZE / 8; i++) {
-        //     zeros += _mm_popcnt_u64(~packet.raw64[i]);
-        // }
-        // packet.header[0] |= (zeros << 1);
+        // checksum
+        // print_packet(&packet);
+        uint8_t zeros = _mm_popcnt_u64(~packet.raw64[0]);
+        packet.header[0] |= (zeros << 1);
     }
 
     // debug before
-    if (args.verbose) {
+    if (args.verbose && payload != NULL) {
         printf("bsnd: ");
         print_packet(&packet);
     }
@@ -46,7 +44,7 @@ size_t send_packet(const uint8_t *payload, size_t length) {
     encode_8_4(&packet);
 
     // debug after
-    if (args.verbose) {
+    if (args.verbose && payload != NULL) {
         printf("asnd: ");
         print_packet(&packet);
         printf("\n");

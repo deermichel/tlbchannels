@@ -8,7 +8,7 @@ const exec = util.promisify(require("child_process").exec);
 const verbose = process.argv.includes("-v");
 const vm1address = "192.168.122.230";
 const vm2address = "192.168.122.206";
-const receiverTimeout = 8000; // ms
+const receiverTimeout = 40000; // ms
 const payloadSize = 7; // bytes
 
 const projectDir = `${process.env["HOME"]}/tlbchannels`;
@@ -201,16 +201,17 @@ const main = async () => {
     // results.push(await run("text.txt", "out.txt", 45, 8, 3, `${evalDir}/out`));
 
     const files = [
-        { snd: "json.h", rcv: "out.h" },
+        // { snd: "json.h", rcv: "out.h" },
         // { snd: "text.txt", rcv: "out.txt" },
         // { snd: "pic.bmp", rcv: "out.bmp" },
+        { snd: "beat.mp3", rcv: "out.mp3" },
     ];
     const configs = [
         // { snd: "-w 6", rcv: "-r 54" }, // minimum so that 2x rcv during 1x snd (rcv-window 1)
         // { snd: "-w 12", rcv: "-r 54" }, // minimum so that 2x rcv during 1x snd (rcv-window 2)
         // { snd: "-w 16", rcv: "" }, // minimum so that 2x rcv during 1x snd
-        // { snd: "-w 18", rcv: "-r 54" },
-        { snd: "-w 20", rcv: "" },
+        // { snd: "-w 16", rcv: "-r 54" },
+        { snd: "-w 36", rcv: "" },
     ];
 
     for ({ snd: sndFile, rcv: rcvFile } of files) {
