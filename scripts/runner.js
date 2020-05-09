@@ -9,7 +9,7 @@ const verbose = process.argv.includes("-v");
 const vm1address = "192.168.122.230";
 const vm2address = "192.168.122.206";
 const receiverTimeout = 4000; // ms
-const payloadSize = 16; // bytes
+const payloadSize = 15; // bytes
 
 const projectDir = `${process.env["HOME"]}/tlbchannels`;
 const senderDir = `${projectDir}/src/sender`;
@@ -208,7 +208,8 @@ const main = async () => {
     const configs = [
         // { snd: "-w 6", rcv: "-r 54" }, // minimum so that 2x rcv during 1x snd (rcv-window 1)
         // { snd: "-w 12", rcv: "-r 54" }, // minimum so that 2x rcv during 1x snd (rcv-window 2)
-        { snd: "-w 16", rcv: "" }, // minimum so that 2x rcv during 1x snd
+        // { snd: "-w 16", rcv: "" }, // minimum so that 2x rcv during 1x snd
+        { snd: "-w 18", rcv: "-r 54" },
     ];
 
     for ({ snd: sndFile, rcv: rcvFile } of files) {

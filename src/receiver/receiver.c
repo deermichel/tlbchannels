@@ -90,7 +90,7 @@ int main(int argc, char **argv) {
         // data stop
         // if (packet.header[0] == 0xEE && packet.header[1] == 0xFF && packet.header[2] == 0xFF) break;
         static uint8_t endcount = 0;
-        if (packet.payload[0] == 0xEE && packet.payload[1] == 0xFF && packet.payload[2] == 0xFF) {
+        if (packet.header[0] == 0xEE && packet.payload[0] == 0xFF && packet.payload[1] == 0xFF) {
             endcount++;
             if (endcount == 20) {
                 break;

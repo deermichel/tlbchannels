@@ -5,6 +5,7 @@
 #include <x86intrin.h>
 #include "../asm.h"
 #include "../debug.h"
+#include "../hamming.h"
 #include "../memory.h"
 #include "../packet.h"
 #include "cli.h"
@@ -18,11 +19,12 @@ size_t send_packet(const uint8_t *payload, size_t length) {
 
     // pack data
     if (payload == NULL) {
-        packet.payload[0] = 0xEE;
+        packet.header[0] = 0xEE;
     } else {
         memcpy(packet.payload, payload, tosend);
 
         // header
+        packet.header[0] = 0x00;
         // static uint8_t sqn = 0;
         // packet.header[0] = (sqn++ % 2);
 
@@ -34,14 +36,29 @@ size_t send_packet(const uint8_t *payload, size_t length) {
         // packet.header[0] |= (zeros << 1);
     }
 
-    // debug
+    // debug before
     if (args.verbose) {
-        printf("snd: ");
+        printf("bsnd: ");
         print_packet(&packet);
     }
 
+    // hamming
+    if (payload != NULL) record_packet(&packet); // logging
+    for (int i = 0; i < 8; i++) {
+        uint16_t hamming = enc8_16(packet.raw[i]);
+        packet.raw[i] = hamming & 0x00FF;
+        packet.raw[i+8] = (hamming & 0xFF00) >> 8;
+    }
+
+    // debug after
+    if (args.verbose) {
+        printf("asnd: ");
+        print_packet(&packet);
+        printf("\n");
+    }
+
     // sender loop
-    packet.start = rdtsc();
+    // packet.start = rdtsc();
     for (int i = 0; i < args.window; i++) {
         for (int set = 0; set < TLB_SETS; set++) {
             if (packet.raw[set / 8] & (1 << (set % 8))) {
@@ -53,7 +70,7 @@ size_t send_packet(const uint8_t *payload, size_t length) {
             }
         }
     }
-    packet.end = rdtsc();
+    // packet.end = rdtsc();
     if (payload != NULL) record_packet(&packet); // logging
 
     return tosend;
@@ -147,8 +164,8 @@ int main(int argc, char **argv) {
     clock_gettime(CLOCK_MONOTONIC, &end_time);
 
     // send data stop
-    // send_packet(NULL, 0);
-    for (int i = 0; i < 1000; i++) send_packet(NULL, 0);
+    send_packet(NULL, 0);
+    // for (int i = 0; i < 1000; i++) send_packet(NULL, 0);
 
     // end logging
     record_packet(NULL);
