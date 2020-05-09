@@ -18,20 +18,20 @@ size_t send_packet(const uint8_t *payload, size_t length) {
 
     // pack data
     if (payload == NULL) {
-        packet.header[0] = 0xEE;
+        packet.payload[0] = 0xEE;
     } else {
         memcpy(packet.payload, payload, tosend);
 
         // header
-        static uint8_t sqn = 0;
-        packet.header[0] = (sqn++ % 2);
+        // static uint8_t sqn = 0;
+        // packet.header[0] = (sqn++ % 2);
 
-        // checksum
-        uint8_t zeros = 0;
-        for (int i = 0; i < PACKET_SIZE / 8; i++) {
-            zeros += _mm_popcnt_u64(~packet.raw64[i]);
-        }
-        packet.header[0] |= (zeros << 1);
+        // // checksum
+        // uint8_t zeros = 0;
+        // for (int i = 0; i < PACKET_SIZE / 8; i++) {
+        //     zeros += _mm_popcnt_u64(~packet.raw64[i]);
+        // }
+        // packet.header[0] |= (zeros << 1);
     }
 
     // debug
@@ -148,7 +148,7 @@ int main(int argc, char **argv) {
 
     // send data stop
     // send_packet(NULL, 0);
-    for (int i = 0; i < 100; i++) send_packet(NULL, 0);
+    for (int i = 0; i < 1000; i++) send_packet(NULL, 0);
 
     // end logging
     record_packet(NULL);

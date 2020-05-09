@@ -9,7 +9,7 @@
 #define PACKET_SIZE (TLB_SETS / 8)
 
 // header size (bytes)
-#define HEADER_SIZE 1
+#define HEADER_SIZE 0
 
 // payload size (bytes)
 #define PAYLOAD_SIZE (PACKET_SIZE - HEADER_SIZE)

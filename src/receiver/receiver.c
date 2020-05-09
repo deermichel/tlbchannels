@@ -24,16 +24,21 @@ void receive_packet_pteaccess(packet_t *packet) {
 // receive packet via timestamps
 void receive_packet_rdtsc(packet_t *packet) {
     // probe and count evictions
-    int evictions[TLB_SETS] = {0};
-    for (int i = 0; i < args.window; i++) {
-        for (int set = 0; set < TLB_SETS; set++) {
-            evictions[set] += (probe(ADDR(BASE_ADDR, set, 0)) > args.rdtsc_threshold ? 1 : 0);
-        }
-    }
+    // int evictions[TLB_SETS] = {0};
+    // for (int i = 0; i < args.window; i++) {
+    //     for (int set = 0; set < TLB_SETS; set++) {
+    //         evictions[set] += (probe(ADDR(BASE_ADDR, set, 0)) > args.rdtsc_threshold ? 1 : 0);
+    //     }
+    // }
 
     // evaluate and write packet
-    for (int set = 0; set < TLB_SETS; set++) {
-        packet->raw[set / 8] |= ((evictions[set] >= args.window_threshold ? 1 : 0) << (set % 8));
+    // for (int set = 0; set < TLB_SETS; set++) {
+    //     packet->raw[set / 8] |= ((evictions[set] >= args.window_threshold ? 1 : 0) << (set % 8));
+    // }
+    for (int i = 0; i < 2; i++) {
+        for (int set = 0; set < TLB_SETS; set++) {
+            packet->raw[set / 8] |= (probe(ADDR(BASE_ADDR, set, 0)) > args.rdtsc_threshold ? 1 : 0) << (set % 8);
+        }
     }
 }
 
@@ -85,35 +90,37 @@ int main(int argc, char **argv) {
         // data stop
         // if (packet.header[0] == 0xEE && packet.header[1] == 0xFF && packet.header[2] == 0xFF) break;
         static uint8_t endcount = 0;
-        if (packet.header[0] == 0xEE && packet.payload[0] == 0xFF && packet.payload[1] == 0xFF) {
+        if (packet.payload[0] == 0xEE && packet.payload[1] == 0xFF && packet.payload[2] == 0xFF) {
             endcount++;
             if (endcount == 20) {
                 break;
             }
         };
 
-        // checksum
-        uint8_t should = packet.header[0] >> 1;
+        // if (packet.payload[0] == 0) continue;
 
-        packet.header[0] = packet.header[0] & 0x01;
-        uint8_t zeros = 0;
-        for (int i = 0; i < PACKET_SIZE / 8; i++) {
-            zeros += _mm_popcnt_u64(~packet.raw64[i]);
-        }
-        if (zeros != should) {
-            // printf("corrupt chksum -\n\n");
-            continue;
-        }
+        // checksum
+        // uint8_t should = packet.header[0] >> 1;
+
+        // packet.header[0] = packet.header[0] & 0x01;
+        // uint8_t zeros = 0;
+        // for (int i = 0; i < PACKET_SIZE / 8; i++) {
+        //     zeros += _mm_popcnt_u64(~packet.raw64[i]);
+        // }
+        // if (zeros != should) {
+        //     // printf("corrupt chksum -\n\n");
+        //     continue;
+        // }
 
         // seq
-        uint8_t seq = packet.header[0] & 0x01;
-        packet.header[0] |= (zeros << 1);
-        static uint8_t last_seq = (uint8_t)-1;
-        if (seq == last_seq) {
-            // printf("same seq -\n\n");
-            continue;
-        }
-        last_seq = seq;
+        // uint8_t seq = packet.header[0] & 0x01;
+        // packet.header[0] |= (zeros << 1);
+        // static uint8_t last_seq = (uint8_t)-1;
+        // if (seq == last_seq) {
+        //     // printf("same seq -\n\n");
+        //     continue;
+        // }
+        // last_seq = seq;
 
         // check header
         // if ((packet.header[0] & 0xF0) != 0x60) {

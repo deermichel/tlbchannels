@@ -21,8 +21,8 @@ const main = async () => {
         readFile(`${evalDir}/snd_packets_log.csv`, "utf8"),
         readFile(`${evalDir}/rcv_packets_log.csv`, "utf8"),
     ]);
-    const sndData = parseLogfile(sndLog).map((packet) => packet.data.substring(9)); // payload offset
-    const rcvData = parseLogfile(rcvLog).map((packet) => packet.data.substring(9)); // payload offset
+    const sndData = parseLogfile(sndLog).map((packet) => packet.data.substring(3)); // payload offset
+    const rcvData = parseLogfile(rcvLog).map((packet) => packet.data.substring(3)); // payload offset
     const sndBytes = sndData.join("").split(" ").slice(0, -1);
     const rcvBytes = rcvData.join("").split(" ").slice(0, -1);
 
