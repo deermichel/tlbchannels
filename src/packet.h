@@ -12,7 +12,7 @@
 #define HEADER_SIZE 1
 
 // payload size (bytes)
-#define PAYLOAD_SIZE 7 // (PACKET_SIZE - HEADER_SIZE)
+#define PAYLOAD_SIZE 15 // (PACKET_SIZE - HEADER_SIZE)
 
 // packet definition
 typedef struct {
