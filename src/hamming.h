@@ -36,10 +36,17 @@ const uint8_t DECODES[256] = {
 void encode_8_4(packet_t *packet) {
     // print_packet(packet); // before
 
+    uint8_t raw[8];
+    for (int i = 0; i < 8; i++) raw[i] = packet->raw[i];
     for (int i = 0; i < 8; i++) {
-        packet->raw[i+8] = ENCODES[packet->raw[i] & 0x0F];
-        packet->raw[i] = ENCODES[packet->raw[i] >> 4];
+        packet->raw[2*i] = ENCODES[raw[i] >> 4];
+        packet->raw[2*i+1] = ENCODES[raw[i] & 0x0F];
     }
+
+    // for (int i = 0; i < 8; i++) {
+    //     packet->raw[i+8] = ENCODES[packet->raw[i] & 0x0F];
+    //     packet->raw[i] = ENCODES[packet->raw[i] >> 4];
+    // }
 
     // print_packet(packet); // after
     // printf("\n");
@@ -51,11 +58,13 @@ int decode_8_4(packet_t *packet) {
 
     uint8_t res = 0;
     for (int i = 0; i < 8; i++) {
-        res = DECODES[packet->raw[i]] << 4;
+        // res = DECODES[packet->raw[i]];
+        res = DECODES[packet->raw[2*i]];
         if (res == 0xFF) return 0;
-        packet->raw[i] = res;
+        packet->raw[i] = res << 4;
 
-        res = DECODES[packet->raw[i+8]];
+        // res = DECODES[packet->raw[i+8]];
+        res = DECODES[packet->raw[2*i+1]];
         if (res == 0xFF) return 0;
         packet->raw[i] |= res;
     }
