@@ -5,8 +5,7 @@
 #include "../hamming.h"
 #include "../memory.h"
 #include "../packet.h"
-// #include "pteaccess/interface.h"
-#include "ptmapper/interface.h"
+#include "pteaccess/interface.h"
 #include "cli.h"
 
 // output buffer size (multiples of payload size)
@@ -20,7 +19,7 @@ void receive_packet_pteaccess(packet_t *packet) {
     }
 
     // get packet from access bits
-    ptmapper_get_bits(packet->raw, PACKET_SIZE);
+    pteaccess_get_bits(packet->raw, PACKET_SIZE);
 }
 
 // receive packet via timestamps
@@ -53,12 +52,12 @@ int main(int argc, char **argv) {
     const size_t mem_size = ADDR(0, 0, 16); // to address all sets with up to 16 ways (wasteful!)
     uint8_t *mem = alloc_mem(BASE_ADDR, mem_size);
 
-    // configure kernel module
-    ptmapper_open();
+    // configure kernel module, send vaddrs
+    pteaccess_open();
+    pteaccess_configure(TLB_SETS);
     for (int set = 0; set < TLB_SETS; set++) {
-        TOUCH_MEMORY(ADDR(BASE_ADDR, set, 0)); // touch pages to create pte (-> zero-page mapping)
+        pteaccess_set_addr(ADDR(BASE_ADDR, set, 0), set);
     }
-    ptmapper_map_table(BASE_ADDR);
 
     // open output file
     FILE *output = fopen(args.filename, "w");
@@ -190,23 +189,23 @@ int main(int argc, char **argv) {
         };
 
         // checksum
-        // uint8_t should = packet.header[0] >> 1;
-        // packet.header[0] = packet.header[0] & 0x01;
-        // uint8_t zeros = _mm_popcnt_u64(~packet.raw64[0]);
-        // if (zeros != should) {
-        //     // printf("corrupt chksum -\n\n");
-        //     continue;
-        // }
+        uint8_t should = packet.header[0] >> 1;
+        packet.header[0] = packet.header[0] & 0x01;
+        uint8_t zeros = _mm_popcnt_u64(~packet.raw64[0]) + _mm_popcnt_u64(~packet.raw64[1]);
+        if (zeros != should) {
+            // printf("corrupt chksum -\n\n");
+            continue;
+        }
 
         // seq
-        // uint8_t seq = packet.header[0] & 0x01;
-        // // packet.header[0] |= (zeros << 1);
-        // static uint8_t last_seq = (uint8_t)-1;
-        // if (seq == last_seq) {
-        //     // printf("same seq -\n\n");
-        //     continue;
-        // }
-        // last_seq = seq;
+        uint8_t seq = packet.header[0] & 0x01;
+        packet.header[0] |= (zeros << 1);
+        static uint8_t last_seq = (uint8_t)-1;
+        if (seq == last_seq) {
+            // printf("same seq -\n\n");
+            continue;
+        }
+        last_seq = seq;
 
         // all right!
         record_packet(&packet); // logging
@@ -254,7 +253,6 @@ int main(int argc, char **argv) {
     // cleanup
     fclose(output);
     dealloc_mem(mem, mem_size);
-    // pteaccess_close();
-    ptmapper_close();
+    pteaccess_close();
     return 0;
 }

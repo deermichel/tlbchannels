@@ -29,8 +29,8 @@ size_t send_packet(const uint8_t *payload, size_t length) {
 
         // checksum
         // print_packet(&packet);
-        // uint8_t zeros = _mm_popcnt_u64(~packet.raw64[0]);
-        // packet.header[0] |= (zeros << 1);
+        uint8_t zeros = _mm_popcnt_u64(~packet.raw64[0]) + _mm_popcnt_u64(~packet.raw64[1]);
+        packet.header[0] |= (zeros << 1);
     }
 
     // debug before
