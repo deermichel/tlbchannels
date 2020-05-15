@@ -57,7 +57,7 @@ size_t send_packet(const uint8_t *payload, size_t length) {
             if (packet.raw[set / 8] & (1 << (set % 8))) {
                 // to send a 1-bit, we evict the whole stlb set by accessing addresses that fall into the respective 
                 // stlb set. we access 16 addresses to ensure full eviction in dtlb + stlb.
-                for (int way = 0; way < 17; way++) { // TODO: WHY 17?
+                for (int way = 0; way < 6; way++) { // TODO: WHY 17?
                     TOUCH_MEMORY(ADDR(BASE_ADDR, set ^ (TLB_SETS / 2), way % 16));
                 }
             }
