@@ -6,10 +6,10 @@ const { writeFileSync, mkdirSync } = fs;
 const exec = util.promisify(require("child_process").exec);
 
 const verbose = process.argv.includes("-v");
-const vm1address = "192.168.122.97";
-const vm2address = "192.168.122.144";
+const vm1address = "192.168.122.190";
+const vm2address = "192.168.122.201";
 const receiverTimeout = 40000; // ms
-const payloadSize = 15; // bytes
+const payloadSize = 30; // bytes
 
 const projectDir = `${process.env["HOME"]}/tlbchannels`;
 const senderDir = `${projectDir}/src/sender`;
@@ -211,7 +211,9 @@ const main = async () => {
         // { snd: "-w 12", rcv: "-r 54" }, // minimum so that 2x rcv during 1x snd (rcv-window 2)
         // { snd: "-w 16", rcv: "" }, // minimum so that 2x rcv during 1x snd
         // { snd: "-w 16", rcv: "-r 54" },
-        { snd: "-w 40" },
+        // { snd: "-w 60" },
+        // { snd: "-w 90" },
+        { snd: "-w 180" },
     ];
 
     for ({ snd: sndFile, rcv: rcvFile } of files) {

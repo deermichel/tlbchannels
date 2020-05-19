@@ -25,12 +25,14 @@ size_t send_packet(const uint8_t *payload, size_t length) {
 
         // header
         static uint8_t sqn = 0;
-        packet.header[0] = (sqn++ % 2);
+        packet.header[0] = 0xFF; // for zero counting
+        packet.header[1] = (sqn++ % 2);
 
         // checksum
         // print_packet(&packet);
-        uint8_t zeros = _mm_popcnt_u64(~packet.raw64[0]) + _mm_popcnt_u64(~packet.raw64[1]);
-        packet.header[0] |= (zeros << 1);
+        uint8_t zeros = _mm_popcnt_u64(~packet.raw64[0]) + _mm_popcnt_u64(~packet.raw64[1])
+            + _mm_popcnt_u64(~packet.raw64[2]) + _mm_popcnt_u64(~packet.raw64[3]);
+        packet.header[0] = zeros;
     }
 
     // debug before
