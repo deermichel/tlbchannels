@@ -88,13 +88,21 @@ int main(int argc, char **argv) {
         }
         packet.end = rdtsc(); // log end tsc
 
-        // seq
-        uint8_t seq = packet.header[0];
+        // decode seq
+        // uint8_t msb = DECODES[packet.header[0]];
+        // if (msb == 0xFF) continue; // damaged seq
+        // uint8_t lsb = DECODES[packet.header[1]];
+        // if (lsb == 0xFF) continue; // damaged seq
+        // uint8_t seq = (msb << 4) | lsb;
+        // static uint8_t last_seq = (uint8_t)-1;
+        // if (seq == last_seq || seq == 0) continue; // same or invalid seq
+        // if (seq == 0xFF && packet.header[0] == 0xFF && packet.header[1] == 0xFF) continue; // special case, to exclude tlb flushes
+        // last_seq = seq;
+
         static uint8_t last_seq = (uint8_t)-1;
-        if (seq == last_seq || seq == 0) {
-            // printf("same or invalid seq -\n\n");
-            continue;
-        }
+        uint8_t seq = packet.header[0];
+        if (seq == 0 || (~seq & 0xFF) != packet.header[1] || seq == last_seq) continue; // same or invalid seq
+        // printf("%02x \n", seq, ~seq);
         last_seq = seq;
 
         // all right!
@@ -104,7 +112,6 @@ int main(int argc, char **argv) {
         if (args.verbose) {
             printf("rcv: ");
             print_packet(&packet);
-            printf("\n");
         }
 
         // count packets
