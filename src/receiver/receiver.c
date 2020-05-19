@@ -88,133 +88,21 @@ int main(int argc, char **argv) {
         }
         packet.end = rdtsc(); // log end tsc
 
-        // data stop
-        // if (packet.header[0] == 0xEE && packet.header[1] == 0xFF && packet.header[2] == 0xFF) break;
-        // static uint8_t endcount = 0;
-        // if (packet.header[0] == 0xEE && packet.payload[0] == 0xFF && packet.payload[1] == 0xFF) {
-        //     endcount++;
-        //     if (endcount == 20) {
-        //         break;
-        //     }
-        // };
-
-        // if (packet.payload[0] == 0) continue;
-
-        // checksum
-        // uint8_t should = packet.header[0] >> 1;
-
-        // packet.header[0] = packet.header[0] & 0x01;
-        // uint8_t zeros = 0;
-        // for (int i = 0; i < PACKET_SIZE / 8; i++) {
-        //     zeros += _mm_popcnt_u64(~packet.raw64[i]);
-        // }
-        // if (zeros != should) {
-        //     // printf("corrupt chksum -\n\n");
-        //     continue;
-        // }
-
         // seq
-        // uint8_t seq = packet.header[0] & 0x01;
-        // packet.header[0] |= (zeros << 1);
-        // static uint8_t last_seq = (uint8_t)-1;
-        // if (seq == last_seq) {
-        //     // printf("same seq -\n\n");
-        //     continue;
-        // }
-        // last_seq = seq;
-
-        // check header
-        // if ((packet.header[0] & 0xF0) != 0x60) {
-        //     // printf("corrupt header -\n\n");
-        //     continue;
-        // }
-        // uint8_t seq = (packet.header[0] & 0x01);
-        // static uint8_t last_seq = (uint8_t)-1;
-        // if (seq == last_seq) {
-        //     // printf("same seq -\n\n");
-        //     continue;
-        // }
-        // last_seq = seq;
-
-        // static uint8_t next_sqn = 0;
-        // uint8_t expected_header = 0xD0 | (next_sqn % 4);
-        // if (packet.header[0] != expected_header) {
-        //     // printf("corrupt header - ");
-        //     continue;
-        // }
-        // printf("rcv: ");
-        // print_packet(&packet);
-
-        // checksum
-        // uint32_t checksum = _mm_crc32_u8(0, packet.header[0]);
-        // for (int i = 0; i < PAYLOAD_SIZE; i++) {
-        //     checksum = _mm_crc32_u8(checksum, packet.payload[i]);
-        // }
-        // checksum >>= 16;
-        // if (memcmp(&checksum, &packet.header[1], sizeof(uint16_t)) != 0) {
-        //     // printf("corrupt crc32: %0X\n\n", checksum);
-        //     continue;
-        // }
-
-        // check seq
-        // static uint8_t last_seq = (uint8_t)-1;
-        // if ((packet.header[0] & 0xF0) != 0xD0) {
-        //     // printf("corrupt header -\n\n");
-        //     continue;
-        // }
-        // // if (packet.header[0] == 0) continue;
-        // if ((packet.header[0] & 0x0F) == last_seq) {
-        //     // printf("same seq -\n\n");
-        //     continue;
-        // }
-        // last_seq = packet.header[0] & 0x0F;
-
-        // debug
-        // if (args.verbose) {
-        //     printf("brcv: ");
-        //     print_packet(&packet);
-        // }
-
-        // hamming
-        // if (decode_8_4(&packet) == 0) continue;
-        // record_packet(&packet); // logging
-
-        // data stop
-        static uint8_t endcount = 0;
-        if (packet.header[0] == 0xEE && packet.payload[0] == 0xFF && packet.payload[1] == 0xFF) {
-            endcount++;
-            if (endcount == 20) {
-                break;
-            }
-        };
-
-        // checksum
-        uint8_t should = packet.header[0];
-        packet.header[0] = 0xFF; // for zero counting
-        uint8_t zeros = _mm_popcnt_u64(~packet.raw64[0]) + _mm_popcnt_u64(~packet.raw64[1])
-            + _mm_popcnt_u64(~packet.raw64[2]) + _mm_popcnt_u64(~packet.raw64[3]);
-        if (zeros != should) {
-            // printf("corrupt chksum -\n\n");
-            continue;
-        }
-
-        // seq
-        uint8_t seq = packet.header[1];
-        packet.header[0] = should;
+        uint8_t seq = packet.header[0];
         static uint8_t last_seq = (uint8_t)-1;
-        if (seq == last_seq) {
-            // printf("same seq -\n\n");
+        if (seq == last_seq || seq == 0) {
+            // printf("same or invalid seq -\n\n");
             continue;
         }
         last_seq = seq;
 
         // all right!
-        record_packet(&packet); // logging
-        // next_sqn++;
+        // record_packet(&packet); // logging
 
         // debug
         if (args.verbose) {
-            printf("arcv: ");
+            printf("rcv: ");
             print_packet(&packet);
             printf("\n");
         }
@@ -222,7 +110,6 @@ int main(int argc, char **argv) {
         // count packets
         packets_received++;
         if (packets_received == 1) clock_gettime(CLOCK_MONOTONIC, &first_packet_time);
-        // if (packets_received == 200) break;
 
         // save to buffer
         memcpy(buffer + offset, packet.payload, PAYLOAD_SIZE);

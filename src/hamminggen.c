@@ -11,7 +11,8 @@ void genenc() {
             ((d >> 2) & 1)                          << 3 | // d2
             ((d >> 1) & 1)                          << 2 | // d1
             ((d >> 0) & 1)                          << 1 | // d0
-            (((d >> 3) ^ (d >> 2) ^ (d >> 1)) & 1)  << 0   // p3 = d3 d2 d1 (parity)
+            // (((d >> 3) ^ (d >> 2) ^ (d >> 1)) & 1)  << 0   // p3 = d3 d2 d1 (even parity)
+            (((d >> 3) ^ (d >> 2) ^ (d >> 1)) & 1) ^ 1  << 0   // p3 = d3 d2 d1 (odd parity)
         ;
 
         printf("0x%02X, ", out);
@@ -26,6 +27,8 @@ void genenc() {
 }
 
 void gendec() {
+    const int parity = 1; // even vs odd parity
+
     // p0 p1 d3 p2 d2 d1 d0 p3
     // d7 d6 d5 d4 d3 d2 d1 d0
     for (int d = 0; d < 256; d++) {
@@ -38,7 +41,7 @@ void gendec() {
 
         if (syn == 0) {
             int data = (((d >> 5) & 1) << 3) | ((d >> 1) & 7);
-            if (p3 == 0) {
+            if (p3 == parity) {
                 // everything correct
                 // printf("0x%02X \t ---- \t okay \t %d \n", d, data);
 
@@ -49,7 +52,7 @@ void gendec() {
             printf("0x%02X, ", data);
 
         } else {
-            if (p3 == 0) {
+            if (p3 == parity) {
                 // 2bit error
                 // printf("0x%02X \t ---- \t ---- \n", d);
                 printf("0xFF, ");
