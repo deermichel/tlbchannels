@@ -53,12 +53,12 @@ uint32_t send_data(const uint8_t *buffer, size_t length) {
         encode_rs_8(current_block, &current_block[RS_DATA_SYMBOLS], 0);
 
         // debug
-        printf("block %d:\n", i);
-        for (int i = 0; i < RS_TOTAL_SYMBOLS; i++) {
-            printf("%02x ", current_block[i]);
-            if (i % 32 == 31) printf("\n");
-        }
-        printf("\n\n");
+        // printf("block %d:\n", i);
+        // for (int i = 0; i < RS_TOTAL_SYMBOLS; i++) {
+        //     printf("%02x ", current_block[i]);
+        //     if (i % 32 == 31) printf("\n");
+        // }
+        // printf("\n\n");
     }
 
     // pack rs blocks into packets

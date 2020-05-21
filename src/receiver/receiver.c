@@ -44,6 +44,27 @@ void receive_packet_rdtsc(packet_t *packet) {
     }
 }
 
+// decode and save rs blocks
+void decode_rs_blocks(uint8_t *rs_blocks, FILE *out) {
+    for (int block = 0; block < PAYLOAD_SIZE; block++) {
+        uint8_t *current_block = &rs_blocks[block * RS_TOTAL_SYMBOLS];
+
+        // decode
+        int result = decode_rs_8(current_block, NULL, 0, 0);
+
+        // write to file
+        fwrite(current_block, 1, RS_DATA_SYMBOLS, out);
+
+        // debug
+        printf("block %d (decoding result: %d):\n", block, result);
+        for (int i = 0; i < RS_TOTAL_SYMBOLS; i++) {
+            printf("%02x ", current_block[i]);
+            if (i % 32 == 31) printf("\n");
+        }
+        printf("\n\n");
+    }
+}
+
 // entry point
 int main(int argc, char **argv) {
     // parse cli args
@@ -107,7 +128,7 @@ int main(int argc, char **argv) {
         // last_seq = seq;
 
         // seq
-        static uint8_t last_seq = (uint8_t)-1;
+        static uint8_t last_seq = 0; // (uint8_t)-1;
         uint8_t seq = packet.header[0];
         if (seq == 0 || (~seq & 0xFF) != packet.header[1] || seq == last_seq) continue; // same or invalid seq
         // printf("%02x \n", seq, ~seq);
@@ -154,46 +175,49 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
+    // open out file
+    FILE *out = fopen(args.filename, "w");
+    if (out == NULL) {
+        printf("error opening output file '%s': %s\n", args.filename, strerror(errno));
+        exit(1);
+    }
+
     // pack packets into rs blocks
     uint8_t *rs_blocks = malloc(PAYLOAD_SIZE * RS_TOTAL_SYMBOLS);
     if (rs_blocks == (void*)-1) {
         printf("error allocating memory: %s\n", strerror(errno));
         exit(1);
     }
+    memset(rs_blocks, 0x00, PAYLOAD_SIZE * RS_TOTAL_SYMBOLS);
+    uint8_t last_seq = 0;
     for (int i = 0; i < packets_received; i++) {
         memcpy(packet.raw, &packet_buffer[i * PACKET_SIZE], PACKET_SIZE);
         uint8_t seq = packet.header[0];
 
-        // copy data
-        for (int j = 0; j < PAYLOAD_SIZE; j++) {
-            int block = j;
+        // detect start of next set of blocks
+        if (seq < 0x0F && last_seq > 0xF0) {
+            decode_rs_blocks(rs_blocks, out);
+
+            printf("- next set of blocks -\n");
+            memset(rs_blocks, 0x00, PAYLOAD_SIZE * RS_TOTAL_SYMBOLS);
+        }
+        last_seq = seq;
+
+        // processing packet
+        // printf("processing packet %d with seq %d\n", i, seq);
+        // print_packet(&packet);
+        for (int block = 0; block < PAYLOAD_SIZE; block++) {
             int symbol = seq - 1;
-            // printf("packet %d, payload %d, block %d, symbol %d\n", i, j, block, symbol);
-
-            rs_blocks[block * RS_TOTAL_SYMBOLS + symbol] = packet.payload[j];
-
-            // if (block < num_blocks) {
-            //     packet.payload[j] = rs_blocks[block * RS_TOTAL_SYMBOLS + symbol];
-            // }
+            rs_blocks[block * RS_TOTAL_SYMBOLS + symbol] = packet.payload[block];
         }
     }
 
-    // decode and save rs blocks
-    for (int i = 0; i < 30; i++) {
-        uint8_t *current_block = &rs_blocks[i * RS_TOTAL_SYMBOLS];
-
-        // decode
-        int result = decode_rs_8(current_block, NULL, 0, 0);
-
-        // debug
-        printf("block %d (decoding result: %d):\n", i, result);
-        for (int i = 0; i < RS_TOTAL_SYMBOLS; i++) {
-            printf("%02x ", current_block[i]);
-            if (i % 32 == 31) printf("\n");
-        }
-        printf("\n\n");
-    }
-
+    // finalize, cleanup
+    decode_rs_blocks(rs_blocks, out);
+    fflush(out);
+    fclose(out);
+    fclose(temp_out);
+    remove("out.tmp");
     free(rs_blocks);
 
     // stats
@@ -204,7 +228,6 @@ int main(int argc, char **argv) {
     printf("time: %f s\n", secs);
 
     // cleanup
-    fclose(temp_out);
     dealloc_mem(mem, mem_size);
     pteaccess_close();
     return 0;
