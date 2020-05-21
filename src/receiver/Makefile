@@ -2,7 +2,7 @@
 
 all:
 	# cd ../pteaccess && make
-	gcc -Wall -Wno-unused-result -g -O3 -msse4.2 -DARCH_BROADWELL -o receiver receiver.c
+	gcc -Wall -Wno-unused-result -g -O3 -msse4.2 -DARCH_BROADWELL -o receiver receiver.c -lfec
 
 clean:
 	rm -f receiver

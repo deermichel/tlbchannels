@@ -14,6 +14,11 @@
 // payload size (bytes)
 #define PAYLOAD_SIZE 30 // (PACKET_SIZE - HEADER_SIZE)
 
+// reed solomon config
+#define RS_TOTAL_SYMBOLS 255
+#define RS_DATA_SYMBOLS 223
+#define RS_PARITY_SYMBOLS (RS_TOTAL_SYMBOLS - RS_DATA_SYMBOLS)
+
 // packet definition
 typedef struct {
     // data
