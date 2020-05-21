@@ -88,6 +88,12 @@ int main(int argc, char **argv) {
         }
         packet.end = rdtsc(); // log end tsc
 
+        // data stop
+        static uint8_t stop_count = 0;
+        if (packet.header[0] == 0xEE && packet.header[1] == 0xEE && packet.payload[0] == 0xFF) {
+            if (stop_count++ == 100) break;
+        }
+
         // decode seq
         // uint8_t msb = DECODES[packet.header[0]];
         // if (msb == 0xFF) continue; // damaged seq
@@ -99,6 +105,7 @@ int main(int argc, char **argv) {
         // if (seq == 0xFF && packet.header[0] == 0xFF && packet.header[1] == 0xFF) continue; // special case, to exclude tlb flushes
         // last_seq = seq;
 
+        // seq
         static uint8_t last_seq = (uint8_t)-1;
         uint8_t seq = packet.header[0];
         if (seq == 0 || (~seq & 0xFF) != packet.header[1] || seq == last_seq) continue; // same or invalid seq
@@ -106,7 +113,7 @@ int main(int argc, char **argv) {
         last_seq = seq;
 
         // all right!
-        // record_packet(&packet); // logging
+        record_packet(&packet); // logging
 
         // debug
         if (args.verbose) {

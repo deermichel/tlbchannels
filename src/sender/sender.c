@@ -186,8 +186,11 @@ int main(int argc, char **argv) {
     clock_gettime(CLOCK_MONOTONIC, &end_time);
 
     // send data stop
-    // send_packet(NULL, 0);
-    // for (int i = 0; i < 1000; i++) send_packet(NULL, 0);
+    packet_t packet;
+    memset(packet.raw, 0xFF, PACKET_SIZE);
+    packet.header[0] = 0xEE;
+    packet.header[1] = 0xEE;
+    for (int i = 0; i < 1000; i++) send_packet(&packet);
 
     // end logging
     record_packet(NULL);
