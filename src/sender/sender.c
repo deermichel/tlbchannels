@@ -68,13 +68,6 @@ uint32_t send_data(const uint8_t *buffer, size_t length) {
         packet_t packet;
         memset(packet.raw, 0x00, PACKET_SIZE);
 
-        // seq num (hamming-8,4 encoded) - how to avoid problem with all 0x00 or 0xFF?
-        uint8_t seq = (i % RS_TOTAL_SYMBOLS) + 1; // 0x01 to 0xFF (255 symbols)
-        // packet.header[0] = ENCODES[seq >> 4]; // 4 msb
-        // packet.header[1] = ENCODES[seq & 0x0F]; // 4 lsb
-        packet.header[0] = seq;
-        packet.header[1] = ~seq;
-
         // copy data
         for (int j = 0; j < PAYLOAD_SIZE; j++) {
             int block = (i / RS_TOTAL_SYMBOLS) * PAYLOAD_SIZE + j;
@@ -85,6 +78,13 @@ uint32_t send_data(const uint8_t *buffer, size_t length) {
                 packet.payload[j] = rs_blocks[block * RS_TOTAL_SYMBOLS + symbol];
             }
         }
+
+        // seq num (hamming-8,4 encoded) - how to avoid problem with all 0x00 or 0xFF?
+        uint8_t seq = (i % RS_TOTAL_SYMBOLS) + 1; // 0x01 to 0xFF (255 symbols)
+        // packet.header[0] = ENCODES[seq >> 4]; // 4 msb
+        // packet.header[1] = ENCODES[seq & 0x0F]; // 4 lsb
+        packet.header[0] = seq;
+        packet.header[1] = ~(seq ^ packet.payload[0]);
 
         // debug
         if (args.verbose) {

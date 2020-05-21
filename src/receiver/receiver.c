@@ -128,9 +128,9 @@ int main(int argc, char **argv) {
         // last_seq = seq;
 
         // seq
-        static uint8_t last_seq = 0; // (uint8_t)-1;
+        static uint8_t last_seq = 0xFF; // (uint8_t)-1;
         uint8_t seq = packet.header[0];
-        if (seq == 0 || (~seq & 0xFF) != packet.header[1] || seq == last_seq) continue; // same or invalid seq
+        if (seq == 0 || (~(seq ^ packet.payload[0]) & 0xFF) != packet.header[1] || seq == last_seq) continue; // same or invalid seq
         // printf("%02x \n", seq, ~seq);
         last_seq = seq;
 
