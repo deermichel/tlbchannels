@@ -84,7 +84,15 @@ uint32_t send_data(const uint8_t *buffer, size_t length) {
         // packet.header[0] = ENCODES[seq >> 4]; // 4 msb
         // packet.header[1] = ENCODES[seq & 0x0F]; // 4 lsb
         packet.header[0] = seq;
-        packet.header[1] = ~(seq ^ packet.payload[0]);
+        // packet.header[1] = ~(seq ^ packet.payload[0]);
+
+        // checksum (berger codes)
+        packet.header[1] = 0xFF;
+        uint8_t zeros = 0;
+        for (int i = 0; i < PACKET_SIZE / 8; i++) {
+            zeros += _mm_popcnt_u64(~packet.raw64[i]);
+        }
+        packet.header[1] = zeros;
 
         // debug
         if (args.verbose) {

@@ -142,10 +142,21 @@ int main(int argc, char **argv) {
         // if (seq == 0xFF && packet.header[0] == 0xFF && packet.header[1] == 0xFF) continue; // special case, to exclude tlb flushes
         // last_seq = seq;
 
+        // checksum
+        uint8_t should = packet.header[1];
+        packet.header[1] = 0xFF;
+        uint8_t zeros = 0;
+        for (int i = 0; i < PACKET_SIZE / 8; i++) {
+            zeros += _mm_popcnt_u64(~packet.raw64[i]);
+        }
+        if (zeros != should) continue; // invalid chksum
+        packet.header[1] = should;
+
         // seq
         static uint8_t last_seq = 0xFF; // (uint8_t)-1;
         uint8_t seq = packet.header[0];
-        if (seq == 0 || (~(seq ^ packet.payload[0]) & 0xFF) != packet.header[1] || seq == last_seq) continue; // same or invalid seq
+        // if (seq == 0 || (~(seq ^ packet.payload[0]) & 0xFF) != packet.header[1] || seq == last_seq) continue; // same or invalid seq
+        if (seq == 0 || seq == last_seq) continue; // same or invalid seq
         // printf("%02x \n", seq, ~seq);
         last_seq = seq;
 
