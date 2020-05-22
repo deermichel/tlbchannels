@@ -16,8 +16,8 @@
 
 // reed solomon config
 #define RS_TOTAL_SYMBOLS 255
-#define RS_DATA_SYMBOLS 223
-#define RS_PARITY_SYMBOLS (RS_TOTAL_SYMBOLS - RS_DATA_SYMBOLS)
+#define RS_PARITY_SYMBOLS 32
+#define RS_DATA_SYMBOLS (RS_TOTAL_SYMBOLS - RS_PARITY_SYMBOLS)
 
 // packet definition
 typedef struct {

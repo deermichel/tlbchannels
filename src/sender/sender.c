@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <x86intrin.h>
 #include "../asm.h"
+#include "../crc.h"
 #include "../debug.h"
 #include "../hamming.h"
 #include "../memory.h"
@@ -41,6 +42,9 @@ uint32_t send_data(const uint8_t *buffer, size_t length) {
         printf("error allocating memory: %s\n", strerror(errno));
         exit(1);
     }
+
+    void *rs_codec = init_rs_char(8, 0x187, 112, 11, RS_PARITY_SYMBOLS, 0);
+
     for (int i = 0; i < num_blocks; i++) {
         uint8_t *current_block = &rs_blocks[i * RS_TOTAL_SYMBOLS];
         size_t tosend = (length > RS_DATA_SYMBOLS) ? RS_DATA_SYMBOLS : length;
@@ -50,7 +54,7 @@ uint32_t send_data(const uint8_t *buffer, size_t length) {
         buffer += tosend; length -= tosend;
 
         // encode
-        encode_rs_8(current_block, &current_block[RS_DATA_SYMBOLS], 0);
+        encode_rs_char(rs_codec, current_block, &current_block[RS_DATA_SYMBOLS]);
 
         // debug
         // printf("block %d:\n", i);
@@ -60,6 +64,8 @@ uint32_t send_data(const uint8_t *buffer, size_t length) {
         // }
         // printf("\n\n");
     }
+
+    free_rs_char(rs_codec);
 
     // pack rs blocks into packets
     uint32_t num_packets = RS_TOTAL_SYMBOLS * ceil(num_blocks / (double)PAYLOAD_SIZE);
@@ -84,7 +90,8 @@ uint32_t send_data(const uint8_t *buffer, size_t length) {
         // packet.header[0] = ENCODES[seq >> 4]; // 4 msb
         // packet.header[1] = ENCODES[seq & 0x0F]; // 4 lsb
         packet.header[0] = seq;
-        packet.header[1] = ~(seq ^ packet.payload[0]);
+        // packet.header[1] = ~(seq ^ packet.payload[0]);
+        packet.header[1] = crc8(packet.raw, PACKET_SIZE - 1);
 
         // checksum (berger codes)
         // packet.header[1] = 0xFF;
