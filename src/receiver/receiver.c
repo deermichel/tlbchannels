@@ -45,13 +45,26 @@ void receive_packet_rdtsc(packet_t *packet) {
 }
 
 // decode and save rs blocks (returns index of last non-zero byte)
-int decode_rs_blocks(uint8_t *rs_blocks, FILE *out, int *bytes_ok, int *bytes_corrected, int *bytes_corrupt) {
+int decode_rs_blocks(uint8_t *rs_blocks, uint8_t *used_symbols, FILE *out, int *bytes_ok, int *bytes_corrected, int *bytes_corrupt) {
     int last_nonzero_byte = -1;
     for (int block = 0; block < PAYLOAD_SIZE; block++) {
         uint8_t *current_block = &rs_blocks[block * RS_TOTAL_SYMBOLS];
 
+        // find erasures
+        int eras_pos[RS_TOTAL_SYMBOLS] = {-1};
+        int num_eras = 0;
+        // printf("erasures: ");
+        for (int i = 0; i < RS_TOTAL_SYMBOLS; i++) {
+            if (used_symbols[i] == 0) {
+                eras_pos[num_eras] = i;
+                num_eras++;
+                // printf("%d ", i);
+            }
+        } 
+        // printf("(%d)\n", num_eras);
+
         // decode
-        int corrected_symbols = decode_rs_8(current_block, NULL, 0, 0);
+        int corrected_symbols = decode_rs_8(current_block, eras_pos, num_eras, 0);
 
         // stats
         if (corrected_symbols == -1) {
@@ -217,30 +230,33 @@ int main(int argc, char **argv) {
     memset(rs_blocks, 0x00, PAYLOAD_SIZE * RS_TOTAL_SYMBOLS);
     uint8_t last_seq = 0;
     int bytes_ok = 0; int bytes_corrected = 0; int bytes_corrupt = 0;
+    uint8_t used_symbols[RS_TOTAL_SYMBOLS] = {0};
     for (int i = 0; i < packets_received; i++) {
         memcpy(packet.raw, &packet_buffer[i * PACKET_SIZE], PACKET_SIZE);
         uint8_t seq = packet.header[0];
 
         // detect start of next set of blocks
         if (seq < 0x0F && last_seq > 0xF0) {
-            decode_rs_blocks(rs_blocks, out, &bytes_ok, &bytes_corrected, &bytes_corrupt);
+            decode_rs_blocks(rs_blocks, used_symbols, out, &bytes_ok, &bytes_corrected, &bytes_corrupt);
 
             // printf("- next set of blocks -\n");
             memset(rs_blocks, 0x00, PAYLOAD_SIZE * RS_TOTAL_SYMBOLS);
+            memset(used_symbols, 0, RS_TOTAL_SYMBOLS);
         }
         last_seq = seq;
 
         // processing packet
         // printf("processing packet %d with seq %d\n", i, seq);
         // print_packet(&packet);
+        int symbol = seq - 1;
+        used_symbols[symbol] = 1;
         for (int block = 0; block < PAYLOAD_SIZE; block++) {
-            int symbol = seq - 1;
             rs_blocks[block * RS_TOTAL_SYMBOLS + symbol] = packet.payload[block];
         }
     }
 
     // finalize, cleanup
-    int last_nonzero_byte = decode_rs_blocks(rs_blocks, out, &bytes_ok, &bytes_corrected, &bytes_corrupt);
+    int last_nonzero_byte = decode_rs_blocks(rs_blocks, used_symbols, out, &bytes_ok, &bytes_corrected, &bytes_corrupt);
     int trailing_zero_bytes = RS_DATA_SYMBOLS * PAYLOAD_SIZE - (last_nonzero_byte + 1);
     int length_without_trailing_zeros = ftell(out) - trailing_zero_bytes;
     fflush(out);
