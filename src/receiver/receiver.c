@@ -70,12 +70,12 @@ int decode_rs_blocks(uint8_t *rs_blocks, FILE *out, int *bytes_ok, int *bytes_co
         fwrite(current_block, 1, RS_DATA_SYMBOLS, out);
 
         // debug
-        printf("block %d (corrected symbols: %d):\n", block, corrected_symbols);
-        for (int i = 0; i < RS_TOTAL_SYMBOLS; i++) {
-            printf("%02x ", current_block[i]);
-            if (i % 32 == 31) printf("\n");
-        }
-        printf("\n\n");
+        // printf("block %d (corrected symbols: %d):\n", block, corrected_symbols);
+        // for (int i = 0; i < RS_TOTAL_SYMBOLS; i++) {
+        //     printf("%02x ", current_block[i]);
+        //     if (i % 32 == 31) printf("\n");
+        // }
+        // printf("\n\n");
     }
     return last_nonzero_byte;
 }
@@ -214,7 +214,7 @@ int main(int argc, char **argv) {
         if (seq < 0x0F && last_seq > 0xF0) {
             decode_rs_blocks(rs_blocks, out, &bytes_ok, &bytes_corrected, &bytes_corrupt);
 
-            printf("- next set of blocks -\n");
+            // printf("- next set of blocks -\n");
             memset(rs_blocks, 0x00, PAYLOAD_SIZE * RS_TOTAL_SYMBOLS);
         }
         last_seq = seq;
@@ -231,8 +231,9 @@ int main(int argc, char **argv) {
     // finalize, cleanup
     int last_nonzero_byte = decode_rs_blocks(rs_blocks, out, &bytes_ok, &bytes_corrected, &bytes_corrupt);
     int trailing_zero_bytes = RS_DATA_SYMBOLS * PAYLOAD_SIZE - (last_nonzero_byte + 1);
+    int length_without_trailing_zeros = ftell(out) - trailing_zero_bytes;
     fflush(out);
-    ftruncate(fileno(out), ftell(out) - trailing_zero_bytes); // remove trailing zero bytes
+    ftruncate(fileno(out), length_without_trailing_zeros); // remove trailing zero bytes
     fclose(out);
     fclose(temp_out);
     remove("out.tmp");
@@ -243,8 +244,12 @@ int main(int argc, char **argv) {
     double secs = now.tv_sec - first_packet_time.tv_sec + (double)(now.tv_nsec - first_packet_time.tv_nsec) / 1000000000;
     printf("packets received: %d\n", packets_received);
     int bytes_total = bytes_ok + bytes_corrected + bytes_corrupt;
-    printf("bytes ok: %d | corrected: %d | corrupt: %d | total: %d\n", bytes_ok, bytes_corrected, bytes_corrupt, bytes_total);
-    printf("raw bandwidth: %.3f kB/s\n", (bytes_total / secs) / 1000.0);
+    printf("bytes ok: %d (%.1f%%) | corrected: %d (%.1f%%) | corrupt: %d (%.1f%%) | total: %d (truncated: %d)\n", 
+        bytes_ok, bytes_ok * 100.0 / bytes_total, 
+        bytes_corrected, bytes_corrected * 100.0 / bytes_total, 
+        bytes_corrupt, bytes_corrupt * 100.0 / bytes_total,
+        bytes_total, length_without_trailing_zeros);
+    printf("bandwidth: %.3f kB/s\n", (bytes_total / secs) / 1000.0);
     printf("time: %f s\n", secs);
 
     // cleanup
