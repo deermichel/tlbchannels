@@ -64,7 +64,8 @@ int decode_rs_blocks(uint8_t *rs_blocks, uint8_t *used_symbols, FILE *out, int *
         // printf("(%d)\n", num_eras);
 
         // decode
-        int corrected_symbols = decode_rs_8(current_block, eras_pos, num_eras, 0);
+        // int corrected_symbols = decode_rs_8(current_block, eras_pos, num_eras, 0);
+        int corrected_symbols = decode_rs_8(current_block, NULL, 0, 0);
 
         // stats
         if (corrected_symbols == -1) {
@@ -156,20 +157,27 @@ int main(int argc, char **argv) {
         // last_seq = seq;
 
         // checksum
-        uint8_t should = packet.header[1];
-        packet.header[1] = 0xFF;
-        uint8_t zeros = 0;
+        // uint8_t should = packet.header[1];
+        // packet.header[1] = 0xFF;
+        // uint8_t zeros = 0;
+        // for (int i = 0; i < PACKET_SIZE / 8; i++) {
+        //     zeros += _mm_popcnt_u64(~packet.raw64[i]);
+        // }
+        // if (zeros != should) continue; // invalid chksum
+        // packet.header[1] = should;
+
+        // skip tlb flushes (we can afford this with rs)
+        int ones = 0;
         for (int i = 0; i < PACKET_SIZE / 8; i++) {
-            zeros += _mm_popcnt_u64(~packet.raw64[i]);
+            ones += _mm_popcnt_u64(packet.raw64[i]);
         }
-        if (zeros != should) continue; // invalid chksum
-        packet.header[1] = should;
+        if (ones == TLB_SETS) continue;
 
         // seq
         static uint8_t last_seq = 0xFF; // (uint8_t)-1;
         uint8_t seq = packet.header[0];
-        // if (seq == 0 || (~(seq ^ packet.payload[0]) & 0xFF) != packet.header[1] || seq == last_seq) continue; // same or invalid seq
-        if (seq == 0 || seq == last_seq) continue; // same or invalid seq
+        if (seq == 0 || (~(seq ^ packet.payload[0]) & 0xFF) != packet.header[1] || seq == last_seq) continue; // same or invalid seq
+        // if (seq == 0 || seq == last_seq) continue; // same or invalid seq
         // printf("%02x \n", seq, ~seq);
         last_seq = seq;
 
