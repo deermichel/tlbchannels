@@ -183,7 +183,7 @@ int main(int argc, char **argv) {
     // send data stop
     packet_t packet;
     memset(packet.raw, 0xFF, PACKET_SIZE);
-    packet.header[0] = 0xEE;
+    packet.header[0] = 0x00; // invalid seq -> won't be included in data
     packet.header[1] = 0xEE;
     for (int i = 0; i < 1000; i++) send_packet(&packet);
 

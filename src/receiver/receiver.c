@@ -44,25 +44,40 @@ void receive_packet_rdtsc(packet_t *packet) {
     }
 }
 
-// decode and save rs blocks
-void decode_rs_blocks(uint8_t *rs_blocks, FILE *out) {
+// decode and save rs blocks (returns index of last non-zero byte)
+int decode_rs_blocks(uint8_t *rs_blocks, FILE *out, int *bytes_ok, int *bytes_corrected, int *bytes_corrupt) {
+    int last_nonzero_byte = -1;
     for (int block = 0; block < PAYLOAD_SIZE; block++) {
         uint8_t *current_block = &rs_blocks[block * RS_TOTAL_SYMBOLS];
 
         // decode
-        int result = decode_rs_8(current_block, NULL, 0, 0);
+        int corrected_symbols = decode_rs_8(current_block, NULL, 0, 0);
+
+        // stats
+        if (corrected_symbols == -1) {
+            *bytes_corrupt += RS_DATA_SYMBOLS;
+        } else {
+            *bytes_ok += RS_DATA_SYMBOLS - corrected_symbols;
+            *bytes_corrected += corrected_symbols;
+        }
+
+        // find last non-zero byte
+        for (int i = 0; i < RS_DATA_SYMBOLS; i++) {
+            if (current_block[i] != 0x00) last_nonzero_byte = RS_DATA_SYMBOLS * block + i;
+        }
 
         // write to file
         fwrite(current_block, 1, RS_DATA_SYMBOLS, out);
 
         // debug
-        printf("block %d (decoding result: %d):\n", block, result);
+        printf("block %d (corrected symbols: %d):\n", block, corrected_symbols);
         for (int i = 0; i < RS_TOTAL_SYMBOLS; i++) {
             printf("%02x ", current_block[i]);
             if (i % 32 == 31) printf("\n");
         }
         printf("\n\n");
     }
+    return last_nonzero_byte;
 }
 
 // entry point
@@ -112,7 +127,7 @@ int main(int argc, char **argv) {
 
         // data stop
         static uint8_t stop_count = 0;
-        if (packet.header[0] == 0xEE && packet.header[1] == 0xEE && packet.payload[0] == 0xFF) {
+        if (packet.header[0] == 0x00 && packet.header[1] == 0xEE && packet.payload[0] == 0xFF) {
             if (stop_count++ == 100) break;
         }
 
@@ -190,13 +205,14 @@ int main(int argc, char **argv) {
     }
     memset(rs_blocks, 0x00, PAYLOAD_SIZE * RS_TOTAL_SYMBOLS);
     uint8_t last_seq = 0;
+    int bytes_ok = 0; int bytes_corrected = 0; int bytes_corrupt = 0;
     for (int i = 0; i < packets_received; i++) {
         memcpy(packet.raw, &packet_buffer[i * PACKET_SIZE], PACKET_SIZE);
         uint8_t seq = packet.header[0];
 
         // detect start of next set of blocks
         if (seq < 0x0F && last_seq > 0xF0) {
-            decode_rs_blocks(rs_blocks, out);
+            decode_rs_blocks(rs_blocks, out, &bytes_ok, &bytes_corrected, &bytes_corrupt);
 
             printf("- next set of blocks -\n");
             memset(rs_blocks, 0x00, PAYLOAD_SIZE * RS_TOTAL_SYMBOLS);
@@ -213,8 +229,10 @@ int main(int argc, char **argv) {
     }
 
     // finalize, cleanup
-    decode_rs_blocks(rs_blocks, out);
+    int last_nonzero_byte = decode_rs_blocks(rs_blocks, out, &bytes_ok, &bytes_corrected, &bytes_corrupt);
+    int trailing_zero_bytes = RS_DATA_SYMBOLS * PAYLOAD_SIZE - (last_nonzero_byte + 1);
     fflush(out);
+    ftruncate(fileno(out), ftell(out) - trailing_zero_bytes); // remove trailing zero bytes
     fclose(out);
     fclose(temp_out);
     remove("out.tmp");
@@ -223,8 +241,10 @@ int main(int argc, char **argv) {
     // stats
     clock_gettime(CLOCK_MONOTONIC, &now);
     double secs = now.tv_sec - first_packet_time.tv_sec + (double)(now.tv_nsec - first_packet_time.tv_nsec) / 1000000000;
-    printf("packets received: %d (%d bytes)\n", packets_received, packets_received * PAYLOAD_SIZE);
-    printf("bandwidth: %.3f kB/s\n", ((packets_received * PAYLOAD_SIZE) / secs) / 1000.0);
+    printf("packets received: %d\n", packets_received);
+    int bytes_total = bytes_ok + bytes_corrected + bytes_corrupt;
+    printf("bytes ok: %d | corrected: %d | corrupt: %d | total: %d\n", bytes_ok, bytes_corrected, bytes_corrupt, bytes_total);
+    printf("raw bandwidth: %.3f kB/s\n", (bytes_total / secs) / 1000.0);
     printf("time: %f s\n", secs);
 
     // cleanup
