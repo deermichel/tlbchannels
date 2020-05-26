@@ -9,8 +9,8 @@ const evalDir = `${projectDir}/eval/out`;
 const main = async () => {
     // read bytes
     const [snd, rcv] = await Promise.all([
-        readFile(`${evalDir}/json.h`),
-        readFile(`${evalDir}/out.h`),
+        readFile(`${evalDir}/${process.argv[2]}`),
+        readFile(`${evalDir}/${process.argv[3]}`),
     ]);
 
     // count

@@ -115,7 +115,7 @@ const run = async (sndFile, rcvFile, sndArgs, rcvArgs, destDir) => {
         vm1ssh.getFile(`${destDir}/rcv_packets_log.csv`, `${remoteDir}/packets_log.csv`),
         vm1ssh.getFile(`${destDir}/${rcvFile}`, `${remoteDir}/${rcvFile}`),
         vm2ssh.getFile(`${destDir}/snd_packets_log.csv`, `${remoteDir}/packets_log.csv`),
-        // vm2ssh.getFile(`${destDir}/${sndFile}`, `${remoteDir}/${sndFile}`),
+        vm2ssh.getFile(`${destDir}/${sndFile}`, `${remoteDir}/${sndFile}`),
     ]);
     console.log("retrieved artifacts");
 
@@ -201,9 +201,9 @@ const main = async () => {
     // results.push(await run("text.txt", "out.txt", 45, 8, 3, `${evalDir}/out`));
 
     const files = [
-        { snd: "json.h", rcv: "out.h" },
+        // { snd: "json.h", rcv: "out.h" },
         // { snd: "text.txt", rcv: "out.txt" },
-        // { snd: "pic.bmp", rcv: "out.bmp" },
+        { snd: "pic.bmp", rcv: "out.bmp" },
         // { snd: "beat.mp3", rcv: "out.mp3" },
     ];
     const configs = [
@@ -213,7 +213,7 @@ const main = async () => {
         // { snd: "-w 16", rcv: "-r 54" },
         // { snd: "-w 60" },
         // { snd: "-w 90" },
-        { snd: "-w 180" },
+        { snd: "-w 200" },
     ];
 
     for ({ snd: sndFile, rcv: rcvFile } of files) {
