@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <x86intrin.h>
 #include "../asm.h"
+#include "../crc.h"
 #include "../debug.h"
 #include "../memory.h"
 #include "../packet.h"
@@ -40,7 +41,6 @@ uint32_t send_data(const uint8_t *buffer, size_t length) {
     size_t num_bytes = length;
 
 #ifdef REED_SOLOMON // use reed solomon
-
     // pack data into rs blocks
     uint32_t num_blocks = ceil(num_bytes / (double)RS_DATA_SYMBOLS);
     printf("preparing %d rs blocks for %ld bytes (%d bytes per block)\n", num_blocks, num_bytes, RS_DATA_SYMBOLS);
@@ -96,7 +96,18 @@ uint32_t send_data(const uint8_t *buffer, size_t length) {
         packet.header[0] = seq;
 
         // checksum
-        // packet.header[1] = ~(seq ^ packet.payload[0]);
+#ifdef CHK_BERGER // berger codes
+        packet.header[1] = 0xFF; // prevent overflow
+        uint8_t zeros = 0;
+        for (int i = 0; i < PACKET_SIZE / 8; i++) {
+            zeros += _mm_popcnt_u64(~packet.raw64[i]);
+        }
+        packet.header[1] = zeros;
+#elif defined(CHK_CRC8) // crc8
+        packet.header[1] = crc8(packet.raw, PACKET_SIZE - 1);
+#elif defined(CHK_CUSTOM) // custom xor
+        packet.header[1] = ~(seq ^ packet.payload[0]);
+#endif
 
         // debug
         if (args.verbose) {
