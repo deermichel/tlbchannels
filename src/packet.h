@@ -6,7 +6,9 @@
 #include "arch.h"
 
 // packet size (bytes)
+#ifndef PACKET_SIZE
 #define PACKET_SIZE (TLB_SETS / 8)
+#endif
 
 // header size (bytes)
 #define HEADER_SIZE 2
