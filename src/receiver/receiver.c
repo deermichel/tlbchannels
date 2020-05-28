@@ -114,12 +114,10 @@ int main(int argc, char **argv) {
         // if (ones == TLB_SETS) continue;
 
         // seq
-        // static uint8_t last_seq = 0xFF; // (uint8_t)-1;
-        // uint8_t seq = packet.header[0];
-        // // if (seq == 0 || (~(seq ^ packet.payload[0]) & 0xFF) != packet.header[1] || seq == last_seq) continue; // same or invalid seq
-        // if (seq == 0 || seq == last_seq) continue; // same or invalid seq
-        // // printf("%02x \n", seq, ~seq);
-        // last_seq = seq;
+        static uint8_t last_seq = 0xFF;
+        uint8_t seq = packet.header[0];
+        if (seq == 0 || seq == last_seq) continue; // same or invalid seq
+        last_seq = seq;
 
         // all right!
 #ifdef RECORD_PACKETS

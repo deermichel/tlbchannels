@@ -136,8 +136,23 @@ uint32_t send_data(const uint8_t *buffer, size_t length) {
         buffer += tosend; length -= tosend;
 
         // seq
+        static uint8_t seq = 1;
+        packet.header[0] = seq;
+        if (++seq == 0xFF) seq = 1; // exclude 0x00 and 0xFF to differentiate between no send & tlb flush
 
         // checksum
+#ifdef CHK_BERGER // berger codes
+        packet.header[1] = 0xFF; // prevent overflow
+        uint8_t zeros = 0;
+        for (int i = 0; i < PACKET_SIZE / 8; i++) {
+            zeros += _mm_popcnt_u64(~packet.raw64[i]);
+        }
+        packet.header[1] = zeros;
+#elif defined(CHK_CRC8) // crc8
+        packet.header[1] = crc8(packet.raw, PACKET_SIZE - 1);
+#elif defined(CHK_CUSTOM) // custom xor
+        packet.header[1] = ~(seq ^ packet.payload[0]);
+#endif
 
         // debug
         if (args.verbose) {

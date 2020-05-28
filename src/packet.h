@@ -49,7 +49,7 @@ void create_data_stop(packet_t *packet) {
 
 // return whether packet signals data stop
 int is_data_stop(packet_t *packet) {
-    return 0;
+    return (packet->header[0] == 0x00 && packet->header[1] == 0xEE && packet->payload[0] == 0xFF && packet->payload[1] == 0xFF);
 }
 
 #endif // PACKET_H

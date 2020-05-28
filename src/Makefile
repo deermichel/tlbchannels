@@ -19,11 +19,12 @@
 all: receiver sender
 
 receiver:
-	gcc -Wall -Wno-unused-result -g -O3 -msse4.2 $(CFLAGS) -o receiver/receiver receiver/receiver.c -lfec
+	mkdir -p ../bin
+	gcc -Wall -Wno-unused-result -g -O3 -msse4.2 $(CFLAGS) -o ../bin/receiver receiver/receiver.c -lfec
 
 sender:
-	gcc -Wall -g -O3 -msse4.2 $(CFLAGS) -o sender/sender sender/sender.c -lfec
+	mkdir -p ../bin
+	gcc -Wall -g -O3 -msse4.2 $(CFLAGS) -o ../bin/sender sender/sender.c -lfec
 
 clean:
-	rm -f receiver/receiver
-	rm -f sender/sender
+	rm -Rf ../bin

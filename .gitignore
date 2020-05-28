@@ -14,8 +14,7 @@ node_modules/
 package-lock.json
 
 # binaries
-src/receiver/receiver
-src/sender/sender
+bin/
 
 # misc
 .vscode
