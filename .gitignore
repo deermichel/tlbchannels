@@ -31,3 +31,6 @@ src/receiver/out.txt
 src/sender/pic.bmp
 src/sender/beat.mp3
 src/sender/text.txt
+
+# tmp
+src_old/

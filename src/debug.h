@@ -22,7 +22,6 @@ void print_packet(packet_t *packet) {
 
     // string representation
     char string_buffer[PAYLOAD_SIZE + 1] = {0};
-    // int is_string = 1;
     for (int i = 0; i < PAYLOAD_SIZE; i++) {
         if (packet->payload[i] < 0x20 || packet->payload[i] > 0x7E) {
             string_buffer[i] = '.';
