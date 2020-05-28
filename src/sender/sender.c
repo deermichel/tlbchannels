@@ -31,6 +31,7 @@ void send_packet(packet_t *packet) {
     }
 #ifdef RECORD_PACKETS
     packet->end = rdtsc();
+    record_packet(packet); // logging
 #endif
 }
 
@@ -38,7 +39,77 @@ void send_packet(packet_t *packet) {
 uint32_t send_data(const uint8_t *buffer, size_t length) {
     size_t num_bytes = length;
 
-#ifdef REED_SOLOMON
+#ifdef REED_SOLOMON // use reed solomon
+
+    // pack data into rs blocks
+    uint32_t num_blocks = ceil(num_bytes / (double)RS_DATA_SYMBOLS);
+    printf("preparing %d rs blocks for %ld bytes (%d bytes per block)\n", num_blocks, num_bytes, RS_DATA_SYMBOLS);
+    uint8_t *rs_blocks = malloc(num_blocks * RS_TOTAL_SYMBOLS);
+    if (rs_blocks == (void*)-1) {
+        printf("error allocating memory: %s\n", strerror(errno));
+        exit(1);
+    }
+    void *rs_codec = init_rs_char(8, 0x187, 112, 11, RS_PARITY_SYMBOLS, 0); // based on the CCSDS code
+    for (int i = 0; i < num_blocks; i++) {
+        uint8_t *current_block = &rs_blocks[i * RS_TOTAL_SYMBOLS];
+        size_t tosend = (length > RS_DATA_SYMBOLS) ? RS_DATA_SYMBOLS : length;
+
+        // copy data
+        memcpy(current_block, buffer, tosend);
+        buffer += tosend; length -= tosend;
+
+        // encode
+        encode_rs_char(rs_codec, current_block, &current_block[RS_DATA_SYMBOLS]);
+
+        // debug
+        if (args.verbose) {
+            printf("\n[block %d]\n", i);
+            for (int i = 0; i < RS_TOTAL_SYMBOLS; i++) {
+                printf("%02x ", current_block[i]);
+                if (i % 32 == 31) printf("\n");
+            }
+            printf("\n\n");
+        }
+    }
+    free_rs_char(rs_codec);
+
+    // pack rs blocks into packets
+    uint32_t num_packets = RS_TOTAL_SYMBOLS * ceil(num_blocks / (double)PAYLOAD_SIZE);
+    printf("sending %d packets for %d rs blocks\n", num_packets, num_blocks);
+    packet_t packet;
+    for (int i = 0; i < num_packets; i++) {
+        memset(packet.raw, 0x00, PACKET_SIZE);
+
+        // copy data
+        for (int j = 0; j < PAYLOAD_SIZE; j++) {
+            int block = (i / RS_TOTAL_SYMBOLS) * PAYLOAD_SIZE + j;
+            int symbol = i % RS_TOTAL_SYMBOLS;
+            // printf("packet %d, payload %d, block %d, symbol %d\n", i, j, block, symbol);
+
+            if (block < num_blocks) {
+                packet.payload[j] = rs_blocks[block * RS_TOTAL_SYMBOLS + symbol];
+            }
+        }
+
+        // seq
+        uint8_t seq = (i % RS_TOTAL_SYMBOLS) + 1; // 0x01 to 0xFF (255 symbols)
+        packet.header[0] = seq;
+
+        // checksum
+        // packet.header[1] = ~(seq ^ packet.payload[0]);
+
+        // debug
+        if (args.verbose) {
+            printf("[%d]\t", i);
+            print_packet(&packet);
+        }
+
+        // send
+        send_packet(&packet);
+    }
+
+    // cleanup
+    free(rs_blocks);
 
 #else // no reed solomon
 
@@ -63,11 +134,8 @@ uint32_t send_data(const uint8_t *buffer, size_t length) {
             print_packet(&packet);
         }
 
-        // send and record
+        // send
         send_packet(&packet);
-#ifdef RECORD_PACKETS
-        record_packet(&packet); // logging
-#endif
     }
 
 #endif // REED_SOLOMON
