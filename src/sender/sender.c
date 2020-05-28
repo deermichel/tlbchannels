@@ -34,6 +34,47 @@ void send_packet(packet_t *packet) {
 #endif
 }
 
+// send raw data
+uint32_t send_data(const uint8_t *buffer, size_t length) {
+    size_t num_bytes = length;
+
+#ifdef REED_SOLOMON
+
+#else // no reed solomon
+
+    // pack data into packets
+    uint32_t num_packets = ceil(num_bytes / (double)PAYLOAD_SIZE);
+    printf("sending %d packets for %ld bytes (%d bytes per packet)\n", num_packets, num_bytes, PAYLOAD_SIZE);
+    packet_t packet;
+    for (int i = 0; i < num_packets; i++) {
+        // prepare packet
+        memset(packet.raw, 0x00, PACKET_SIZE);
+        size_t tosend = (length > PAYLOAD_SIZE) ? PAYLOAD_SIZE : length;
+        memcpy(packet.payload, buffer, tosend);
+        buffer += tosend; length -= tosend;
+
+        // seq
+
+        // checksum
+
+        // debug
+        if (args.verbose) {
+            printf("[%d]\t", i);
+            print_packet(&packet);
+        }
+
+        // send and record
+        send_packet(&packet);
+#ifdef RECORD_PACKETS
+        record_packet(&packet); // logging
+#endif
+    }
+
+#endif // REED_SOLOMON
+
+    return num_bytes;
+}
+
 // send file
 uint32_t send_file(const char* filename) {
     // open file
@@ -61,25 +102,36 @@ uint32_t send_file(const char* filename) {
     mlock(buffer, st.st_size);
 
     // send data
-    // uint32_t packets_sent = send_data(buffer, st.st_size);
-     uint32_t packets_sent = 0;
+    uint32_t bytes_sent = send_data(buffer, st.st_size);
 
     // cleanup
     munlock(buffer, st.st_size);
     munmap(buffer, st.st_size);
-    return packets_sent;
+    return bytes_sent;
 }
 
 // send string
 uint32_t send_string(const char *string) {
-    // return send_data((uint8_t*)string, strlen(string));
-    return 0;
+    return send_data((uint8_t*)string, strlen(string));
 }
 
 // entry point
 int main(int argc, char **argv) {
     // parse cli args
     argp_parse(&argp, argc, argv, 0, 0, 0);
+
+    // build flags, params
+    if (args.verbose) {
+        printf("-------------------\n");
+        printf("tlb sets: %d\n", TLB_SETS);
+        printf("packet size: %d bytes (%d payload, %d header)\n", PACKET_SIZE, PAYLOAD_SIZE, HEADER_SIZE);
+        printf("num evictions: %d\n", NUM_EVICTIONS);
+        printf("num iterations: %d\n", args.window);
+#ifdef REED_SOLOMON
+        printf("reed solomon: %d parity bytes\n", RS_PARITY_SYMBOLS);
+#endif
+        printf("-------------------\n");
+    }
 
     // allocate memory
     const size_t mem_size = ADDR(0, 0, NUM_EVICTIONS); // (wasteful, but maps to zero-page)
@@ -117,12 +169,15 @@ int main(int argc, char **argv) {
     for (int i = 0; i < 1000; i++) send_packet(&packet);
 
     // end logging
+#ifdef RECORD_PACKETS
     record_packet(NULL);
+#endif
 
     // stats
     double secs = end_time.tv_sec - start_time.tv_sec + (double)(end_time.tv_nsec - start_time.tv_nsec) / 1000000000;
-    printf("bandwidth limit: %.3f kB/s\n", (bytes_sent / secs) / 1000.0);
+    printf("bytes sent: %d\n", bytes_sent);
     printf("time: %f s\n", secs);
+    printf("bandwidth limit: %.3f kB/s\n", (bytes_sent / secs) / 1000.0);
 
     // cleanup
     dealloc_mem(mem, mem_size);

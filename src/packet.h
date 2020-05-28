@@ -14,6 +14,13 @@
 // payload size (bytes)
 #define PAYLOAD_SIZE (PACKET_SIZE - HEADER_SIZE)
 
+// reed solomon config
+#ifdef REED_SOLOMON
+#define RS_TOTAL_SYMBOLS 255 // symbol size of 8 bit (1 byte) -> 2^8-1 = 255
+#define RS_PARITY_SYMBOLS REED_SOLOMON
+#define RS_DATA_SYMBOLS (RS_TOTAL_SYMBOLS - RS_PARITY_SYMBOLS)
+#endif
+
 // packet definition
 typedef struct {
     // data
