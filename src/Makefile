@@ -8,7 +8,7 @@
 # CHK_CRC8				use crc8 checksum
 # CHK_CUSTOM			use custom checksum
 # NUM_EVICTIONS			number of evictions per set during sender loop (most likely = TLB_WAYS)
-# PACKET_SIZE			packet size in bytes (defaults to maximum = TLB_SETS / 8)
+# PACKET_SIZE			packet size in bytes (defaults to maximum = TLB_SETS / 8) - multiples of 8 (8/16/24/32)
 # RDTSC_THRESHOLD		threshold to determine whether tlb entry got evicted when using timestamps
 # RDTSC_WINDOW			number of tsc probe iterations per packet receive loop (use accessed bits = leave undefined)
 # RECORD_PACKETS		log packets including start / end timestamps

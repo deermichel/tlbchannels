@@ -76,12 +76,14 @@ int decode_rs_blocks(uint8_t *rs_blocks, uint8_t *used_symbols, void *rs_codec, 
         fwrite(current_block, 1, RS_DATA_SYMBOLS, out);
 
         // debug
-        printf("\nblock %d (corrected symbols: %d):\n", block, corrected_symbols);
-        for (int i = 0; i < RS_TOTAL_SYMBOLS; i++) {
-            printf("%02x ", current_block[i]);
-            if (i % 32 == 31) printf("\n");
+        if (args.verbose) {
+            printf("\nblock %d (corrected symbols: %d):\n", block, corrected_symbols);
+            for (int i = 0; i < RS_TOTAL_SYMBOLS; i++) {
+                printf("%02x ", current_block[i]);
+                if (i % 32 == 31) printf("\n");
+            }
+            printf("\n\n");
         }
-        printf("\n\n");
     }
     return last_nonzero_byte;
 }
@@ -171,11 +173,23 @@ int main(int argc, char **argv) {
         if (packet.header[1] != (~(packet.header[0] ^ packet.payload[0]) & 0xFF)) continue;
 #endif
 
+        // skip presumably tlb flushes (0xFF) (rs requires either 0x00 or 0xFF seq - but we can afford dropping some packets)
+#ifdef REED_SOLOMON
+        int ones = 0;
+        for (int i = 0; i < PACKET_SIZE / 8; i++) {
+            ones += _mm_popcnt_u64(packet.raw64[i]);
+        }
+        if (ones == PACKET_SIZE * 8) continue;
+#endif
+
         // seq
         static uint8_t last_seq = 0xFF;
         uint8_t seq = packet.header[0];
-        // skip presumably tlb flushes (0xFF) (we can afford dropping packets with rs)
+#ifdef REED_SOLOMON
+        if (seq == 0x00 || seq == last_seq) continue; // same or invalid seq
+#else
         if (seq == 0x00 || seq == 0xFF || seq == last_seq) continue; // same or invalid seq
+#endif
         last_seq = seq;
 
         // all right!
