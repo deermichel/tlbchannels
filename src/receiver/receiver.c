@@ -45,6 +45,13 @@ int main(int argc, char **argv) {
         printf("-------------------\n");
         printf("tlb sets: %d\n", TLB_SETS);
         printf("packet size: %d bytes (%d payload, %d header)\n", PACKET_SIZE, PAYLOAD_SIZE, HEADER_SIZE);
+#ifdef CHK_BERGER
+        printf("checksum: berger codes\n");
+#elif defined(CHK_CRC8)
+        printf("checksum: crc8\n");
+#elif defined(CHK_CUSTOM)
+        printf("checksum: custom\n");
+#endif
 #ifdef RDTSC_WINDOW
         printf("rdtsc window: %d\n", RDTSC_WINDOW);
         printf("rdtsc threshold: %d\n", RDTSC_THRESHOLD);
@@ -93,30 +100,27 @@ int main(int argc, char **argv) {
         static uint8_t stop_count = 0;
         if (is_data_stop(&packet) && stop_count++ == 100) break;
 
-        // checksum crc8
-        // if (crc8(packet.raw, PACKET_SIZE - 1) != packet.header[1]) continue;
-
-        // checksum berger
-        // uint8_t should = packet.header[1];
-        // packet.header[1] = 0xFF;
-        // uint8_t zeros = 0;
-        // for (int i = 0; i < PACKET_SIZE / 8; i++) {
-        //     zeros += _mm_popcnt_u64(~packet.raw64[i]);
-        // }
-        // if (zeros != should) continue; // invalid chksum
-        // packet.header[1] = should;
-
-        // skip tlb flushes (we can afford this with rs)
-        // int ones = 0;
-        // for (int i = 0; i < PACKET_SIZE / 8; i++) {
-        //     ones += _mm_popcnt_u64(packet.raw64[i]);
-        // }
-        // if (ones == TLB_SETS) continue;
+        // checksum
+#ifdef CHK_BERGER // berger codes
+        uint8_t should = packet.header[1];
+        packet.header[1] = 0xFF;
+        uint8_t zeros = 0;
+        for (int i = 0; i < PACKET_SIZE / 8; i++) {
+            zeros += _mm_popcnt_u64(~packet.raw64[i]);
+        }
+        if (zeros != should) continue; // invalid chksum
+        packet.header[1] = should;
+#elif defined(CHK_CRC8) // crc8
+        if (crc8(packet.raw, PACKET_SIZE) != 0) continue;
+#elif defined(CHK_CUSTOM) // custom xor
+        if (packet.header[1] != (~(packet.header[0] ^ packet.payload[0]) & 0xFF)) continue;
+#endif
 
         // seq
         static uint8_t last_seq = 0xFF;
         uint8_t seq = packet.header[0];
-        if (seq == 0 || seq == last_seq) continue; // same or invalid seq
+        // skip presumably tlb flushes (0xFF) (we can afford dropping packets with rs)
+        if (seq == 0x00 || seq == 0xFF || seq == last_seq) continue; // same or invalid seq
         last_seq = seq;
 
         // all right!
@@ -174,7 +178,6 @@ int main(int argc, char **argv) {
     // extract data from packets
     for (int i = 0; i < packets_received; i++) {
         memcpy(packet.raw, &packet_buffer[i * PACKET_SIZE], PACKET_SIZE);
-        // uint8_t seq = packet.header[0];
         fwrite(packet.payload, 1, PAYLOAD_SIZE, out);
     }
 
@@ -199,8 +202,9 @@ int main(int argc, char **argv) {
     //     bytes_corrupt, bytes_corrupt * 100.0 / bytes_total,
     //     bytes_total, length_without_trailing_zeros);
     // printf("bandwidth: %.3f kB/s\n", (bytes_total / secs) / 1000.0);
-    printf("bandwidth: %.3f kB/s\n", (packets_received * PAYLOAD_SIZE / secs) / 1000.0);
+    printf("bytes received: %d\n", packets_received * PAYLOAD_SIZE);
     printf("time: %f s\n", secs);
+    printf("bandwidth: %.3f kB/s\n", (packets_received * PAYLOAD_SIZE / secs) / 1000.0);
 
     // cleanup
     dealloc_mem(mem, mem_size);

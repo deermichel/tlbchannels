@@ -151,7 +151,7 @@ uint32_t send_data(const uint8_t *buffer, size_t length) {
 #elif defined(CHK_CRC8) // crc8
         packet.header[1] = crc8(packet.raw, PACKET_SIZE - 1);
 #elif defined(CHK_CUSTOM) // custom xor
-        packet.header[1] = ~(seq ^ packet.payload[0]);
+        packet.header[1] = ~(packet.header[0] ^ packet.payload[0]);
 #endif
 
         // debug
@@ -221,6 +221,13 @@ int main(int argc, char **argv) {
         printf("packet size: %d bytes (%d payload, %d header)\n", PACKET_SIZE, PAYLOAD_SIZE, HEADER_SIZE);
         printf("num evictions: %d\n", NUM_EVICTIONS);
         printf("num iterations: %d\n", args.window);
+#ifdef CHK_BERGER
+        printf("checksum: berger codes\n");
+#elif defined(CHK_CRC8)
+        printf("checksum: crc8\n");
+#elif defined(CHK_CUSTOM)
+        printf("checksum: custom\n");
+#endif
 #ifdef REED_SOLOMON
         printf("reed solomon: %d parity bytes\n", RS_PARITY_SYMBOLS);
 #endif
