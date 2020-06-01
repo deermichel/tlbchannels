@@ -1,15 +1,13 @@
 const node_ssh = require("node-ssh");
 const util = require("util");
 const fs = require("fs");
-const readFile = util.promisify(fs.readFile);
 const { writeFileSync, mkdirSync } = fs;
 const exec = util.promisify(require("child_process").exec);
 
 const verbose = process.argv.includes("-v");
 const vm1address = "192.168.122.190";
 const vm2address = "192.168.122.201";
-const receiverTimeout = 40000; // ms
-const payloadSize = 30; // bytes
+const receiverTimeout = 10000; // ms
 
 const projectDir = `${process.env["HOME"]}/tlbchannels`;
 const binDir = `${projectDir}/bin`;
@@ -18,16 +16,6 @@ const evalDir = `${projectDir}/eval`;
 const remoteDir = "/home/user";
 
 let vm1ssh, vm2ssh;
-
-// parse csv logfile
-const parseLogfile = (csv) => {
-    const rows = csv.split("\n").slice(0, -1).map((row) => row.split(","));
-    const packets = rows.map(([start, end, data]) => ({ 
-        start, end, data,
-        // data: data.split(" ").slice(0, -1),
-    }));
-    return packets;
-};
 
 // compile locally and copy binaries
 const compileAndCopy = async (buildFlags) => {
@@ -71,37 +59,28 @@ const disconnect = async () => {
 }
 
 // run config and evaluate results
-const run = async (sndFile, rcvFile, sndArgs, rcvArgs, destDir) => {
-    console.log(`[sndFile: ${sndFile} | rcvFile: ${rcvFile} | sndArgs: ${sndArgs} | rcvArgs: ${rcvArgs}]`);
+const run = async (sndFile, rcvFile, sndWindow, destDir, flags) => {
     mkdirSync(destDir, { recursive: true });
 
     // execute binaries
     const killReceiver = setTimeout(() => vm1ssh.execCommand("pkill receiver"), receiverTimeout);
-    let transferDuration = "timeout";
-    let sendDuration = "timeout";
     try {
         const [r1, r2] = await Promise.all([
-            vm1ssh.exec("./receiver", ["-o", rcvFile, rcvArgs], { cwd: remoteDir }),
-            vm2ssh.exec("./sender", ["-f", sndFile, sndArgs], { cwd: remoteDir }),
+            vm1ssh.exec("./receiver", ["-o", rcvFile], { cwd: remoteDir }),
+            vm2ssh.exec("./sender", ["-f", sndFile, "-w", sndWindow], { cwd: remoteDir }),
         ]);
-        transferDuration = parseFloat(r1.match(/time: (.*) s/)[1]);
-        sendDuration = parseFloat(r2.match(/time: (.*) s/)[1]);
-        if (verbose) {
-            console.log("--- receiver stdout ---");
-            console.log(r1);
-            console.log("--- sender stdout ---");
-            console.log(r2);
-            console.log("---");
-        }
+        const stdout = `--- flags ---\n${flags.join(" ")}\n--- receiver stdout ---\n${r1}\n--- sender stdout (sndWindow: ${sndWindow}) ---\n${r2}\n---`
+        writeFileSync(`${destDir}/stdout.txt`, stdout);
+        if (verbose) console.log(stdout);
     } catch (error) {
+        writeFileSync(`${destDir}/error.txt`, error.toString());
         if (error.message === "Terminated") {
             console.log("error: receiver timed out");
         } else {
             console.log(error);
         }
-        
     }
-    clearInterval(killReceiver);
+    clearTimeout(killReceiver);
     console.log("binaries executed");
 
     // retrieve artifacts
@@ -112,96 +91,35 @@ const run = async (sndFile, rcvFile, sndArgs, rcvArgs, destDir) => {
         vm2ssh.getFile(`${destDir}/${sndFile}`, `${remoteDir}/${sndFile}`),
     ]);
     console.log("retrieved artifacts");
-
-    // read logs
-    const [sndLog, rcvLog] = await Promise.all([
-        readFile(`${destDir}/snd_packets_log.csv`, "utf8"),
-        readFile(`${destDir}/rcv_packets_log.csv`, "utf8"),
-    ]);
-    const sndPackets = parseLogfile(sndLog).map((packet) => packet.data);
-    const rcvPackets = parseLogfile(rcvLog).map((packet) => packet.data);
-
-    // compare data
-    let correctPackets = 0;
-    let lostPackets = 0;
-    let insertedPackets = 0;
-    let sndOffset = 0;
-    for (let rcvIndex = 0; rcvIndex < rcvPackets.length; rcvIndex++) {
-        // console.log(rcvIndex, rcvPackets.length);
-        const rcv = rcvPackets[rcvIndex];
-
-        let found = false;
-
-        for (let sndIndex = sndOffset; sndIndex < sndPackets.length; sndIndex++) {
-            const snd = sndPackets[sndIndex];
-
-            if (snd === rcv) {
-                lostPackets += sndIndex - sndOffset;
-                sndOffset = sndIndex + 1;
-                correctPackets++;
-                found = true;
-                break;
-            }
-        }
-
-        if (!found) {
-            insertedPackets++;
-        }
-    }
-    lostPackets += sndPackets.length - sndOffset;
-
-    // results
-    const results = {
-        sndFile, rcvFile, sndArgs, rcvArgs,
-        lostPackets, insertedPackets, transferDuration, sendDuration, correctPackets,
-        sentPackets: sndPackets.length,
-        receivedPackets: rcvPackets.length,
-        sentBytes: sndPackets.length * payloadSize,
-        receivedBytes: rcvPackets.length * payloadSize,
-        bandwidth: ((correctPackets * payloadSize) / transferDuration) / 1000, // kB/s
-        maxBandwidth: ((sndPackets.length * payloadSize) / sendDuration) / 1000, // kB/s
-        rawBandwidth: ((rcvPackets.length * payloadSize) / transferDuration) / 1000, // kB/s
-        errorRate: 1 - (correctPackets / sndPackets.length),
-    };
-    writeFileSync(`${destDir}/results.json`, JSON.stringify(results, null, 4));
-    if (verbose && transferDuration !== "timeout") console.log("results:", results);
-    console.log("results saved");
-
-    return results;
 };
 
 // entry point
 const main = async () => {
     await connect();
 
-    let results = [];
-    const commonFlags = [ "-DARCH_BROADWELL", "-DNUM_EVICTIONS=23" ];
+    const commonFlags = [ "-DARCH_BROADWELL", "-DNUM_EVICTIONS=6" ];
     const configs = [
         // { snd: "-w 6", rcv: "-r 54" }, // minimum so that 2x rcv during 1x snd (rcv-window 1)
         // { snd: "-w 12", rcv: "-r 54" }, // minimum so that 2x rcv during 1x snd (rcv-window 2)
         // { snd: "-w 16", rcv: "" }, // minimum so that 2x rcv during 1x snd
         {
-            buildFlags: ["-DAS"], 
-            sndWindows: [12, 43, 5],
-        },
-        {
-            buildFlags: ["-DF"],
-            sndWindows: [12, 23, 5],
+            buildFlags: ["-DCHK_CRC8"],
+            sndWindows: [25, 50, 100, 150, 200],
         }
     ];
     const files = [
-        // { sndFile: "json.h", rcvFile: "out.h" },
-        { sndFile: "text.txt", rcvFile: "out.txt" },
-        { sndFile: "pic.bmp", rcvFile: "out.bmp" },
-        { sndFile: "beat.mp3", rcvFile: "out.mp3" },
+        { sndFile: "json.h", rcvFile: "out.h" },
+        // { sndFile: "sender.c", rcvFile: "out.c" },
+        // { sndFile: "pic.bmp", rcvFile: "out.bmp" },
+        // { sndFile: "beat.mp3", rcvFile: "out.mp3" },
     ];
 
     for ({ buildFlags, sndWindows } of configs) {
         await compileAndCopy(commonFlags.concat(buildFlags));
         for (sndWindow of sndWindows) {
             for ({ sndFile, rcvFile } of files) {
-                console.log(commonFlags.concat(buildFlags), sndWindow, sndFile, rcvFile);
-                // results.push(await run(sndFile, rcvFile, sndArgs, rcvArgs, `${evalDir}/out`));
+                console.log("\nrun:", buildFlags, sndWindow, sndFile, rcvFile);
+                await run(sndFile, rcvFile, sndWindow, `${evalDir}/out/${sndWindow}`, commonFlags.concat(buildFlags));
             }
         }
     }
