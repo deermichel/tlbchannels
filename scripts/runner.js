@@ -7,7 +7,7 @@ const exec = util.promisify(require("child_process").exec);
 const verbose = process.argv.includes("-v");
 const vm1address = "192.168.122.190";
 const vm2address = "192.168.122.201";
-const receiverTimeout = 10000; // ms
+const receiverTimeout = 40000; // ms
 
 const projectDir = `${process.env["HOME"]}/tlbchannels`;
 const binDir = `${projectDir}/bin`;
@@ -23,6 +23,12 @@ const compileAndCopy = async (buildFlags) => {
     const { stdout } = await exec(`make CFLAGS="${buildFlags.join(" ")}"`, { cwd: srcDir });
     if (verbose) console.log(stdout);
     console.log(`compiled (flags: ${buildFlags.join(" ")})`);
+
+    // cleanup stale runs
+    await Promise.all([
+        vm1ssh.execCommand("pkill receiver"),
+        vm2ssh.execCommand("pkill sender"),
+    ]);
 
     // copy binaries
     await Promise.all([
@@ -77,8 +83,8 @@ const run = async (sndFile, rcvFile, sndWindow, destDir, flags) => {
             console.log("error: receiver timed out");
         } else {
             console.log(error);
-            clearTimeout(killReceiver);
         }
+        clearTimeout(killReceiver);
         writeFileSync(`${destDir}/error.txt`, error.toString());
         return;
     }
@@ -105,6 +111,7 @@ const run = async (sndFile, rcvFile, sndWindow, destDir, flags) => {
     appendFileSync(`${destDir}/result.txt`, results);
     if (verbose) console.log(results);
     console.log("saved results");
+    return results;
 };
 
 // entry point
@@ -112,23 +119,25 @@ const main = async () => {
     await connect();
 
     const iterations = 1;
-    const commonFlags = [ "-DARCH_BROADWELL", "-DNUM_EVICTIONS=6" ];
-    const configs = [
-        // { snd: "-w 6", rcv: "-r 54" }, // minimum so that 2x rcv during 1x snd (rcv-window 1)
-        // { snd: "-w 12", rcv: "-r 54" }, // minimum so that 2x rcv during 1x snd (rcv-window 2)
-        // { snd: "-w 16", rcv: "" }, // minimum so that 2x rcv during 1x snd
+    // rdtsc threshold: i7-broadwell 67, xeon-skylake 54
+    // rdtsc window: i7-broadwell 1
+    // num evictions (rdtsc): i7-broadwell 10
+    const commonFlags = [ "-DARCH_BROADWELL", "-DRDTSC_THRESHOLD=67", "-DRDTSC_WINDOW=1", "-DRECORD_PACKETS" ];
+    let configs = [
         {
-            buildFlags: ["-DCHK_CRC8 -DREED_SOLOMON=64"],
-            sndWindows: [200],
-        }
+            buildFlags: [`-DNUM_EVICTIONS=10 -DCHK_CRC8`],
+            sndWindows: [50],
+        },
     ];
     const files = [
         { sndFile: "json.h", rcvFile: "out.h" },
         // { sndFile: "sender.c", rcvFile: "out.c" },
+        // { sndFile: "pic.png", rcvFile: "out.png" },
         // { sndFile: "pic.bmp", rcvFile: "out.bmp" },
-        // { sndFile: "beat.mp3", rcvFile: "out.mp3" },
+        { sndFile: "beat.mp3", rcvFile: "out.mp3" },
     ];
 
+    let results = [];
     for (let i = 0; i < iterations; i++) {
         for ({ buildFlags, sndWindows } of configs) {
             const allFlags = commonFlags.concat(buildFlags);
@@ -137,11 +146,21 @@ const main = async () => {
                 for ({ sndFile, rcvFile } of files) {
                     console.log("\nrun:", buildFlags, sndWindow, sndFile, rcvFile);
                     const outDir = `${evalDir}/${commonFlags}/iter_${i}/${buildFlags}/${sndWindow}/${sndFile}`;
-                    await run(sndFile, rcvFile, sndWindow, outDir, allFlags);
+
+                    const output = await run(sndFile, rcvFile, sndWindow, outDir, allFlags);
+                    // console.log(output);
+                    if (output) {
+                        const metric = output.match(/received: (.*),/)[1];
+                        const metric2 = output.match(/packetCorrectness: (.*),/)[1];
+                        console.log({ receivedPackets: metric, correctness: metric2, outDir });
+                        results.push({ receivedPackets: metric, correctness: metric2, outDir });
+                    }
                 }
             }
         }
     }
+
+    console.log(results);
 
     await disconnect();
 }
