@@ -2,16 +2,10 @@ const util = require("util");
 const fs = require("fs");
 const readFile = util.promisify(fs.readFile);
 
-const projectDir = `${process.env["HOME"]}/tlbchannels`;
-const evalDir = `${projectDir}/eval/out`;
-
 // entry point
 const main = async () => {
     // read bytes
-    const [snd, rcv] = await Promise.all([
-        readFile(`${evalDir}/${process.argv[2]}`),
-        readFile(`${evalDir}/${process.argv[3]}`),
-    ]);
+    const [snd, rcv] = await Promise.all([readFile(process.argv[2]), readFile(process.argv[3])]);
 
     // count
     const sent = snd.length;

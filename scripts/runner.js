@@ -85,10 +85,12 @@ const run = async (sndFile, rcvFile, sndWindow, destDir, flags) => {
 
     // retrieve artifacts
     await Promise.all([
-        vm1ssh.getFile(`${destDir}/rcv_packets_log.csv`, `${remoteDir}/packets_log.csv`),
         vm1ssh.getFile(`${destDir}/${rcvFile}`, `${remoteDir}/${rcvFile}`),
-        vm2ssh.getFile(`${destDir}/snd_packets_log.csv`, `${remoteDir}/packets_log.csv`),
         vm2ssh.getFile(`${destDir}/${sndFile}`, `${remoteDir}/${sndFile}`),
+    ]);
+    if (flags.includes("-DRECORD_PACKETS")) await Promise.all([
+        vm1ssh.getFile(`${destDir}/rcv_packets_log.csv`, `${remoteDir}/packets_log.csv`),
+        vm2ssh.getFile(`${destDir}/snd_packets_log.csv`, `${remoteDir}/packets_log.csv`),
     ]);
     console.log("retrieved artifacts");
 };
@@ -97,6 +99,7 @@ const run = async (sndFile, rcvFile, sndWindow, destDir, flags) => {
 const main = async () => {
     await connect();
 
+    const iterations = 2;
     const commonFlags = [ "-DARCH_BROADWELL", "-DNUM_EVICTIONS=6" ];
     const configs = [
         // { snd: "-w 6", rcv: "-r 54" }, // minimum so that 2x rcv during 1x snd (rcv-window 1)
@@ -104,7 +107,7 @@ const main = async () => {
         // { snd: "-w 16", rcv: "" }, // minimum so that 2x rcv during 1x snd
         {
             buildFlags: ["-DCHK_CRC8"],
-            sndWindows: [25, 50, 100, 150, 200],
+            sndWindows: [50, 100],
         }
     ];
     const files = [
@@ -114,12 +117,16 @@ const main = async () => {
         // { sndFile: "beat.mp3", rcvFile: "out.mp3" },
     ];
 
-    for ({ buildFlags, sndWindows } of configs) {
-        await compileAndCopy(commonFlags.concat(buildFlags));
-        for (sndWindow of sndWindows) {
-            for ({ sndFile, rcvFile } of files) {
-                console.log("\nrun:", buildFlags, sndWindow, sndFile, rcvFile);
-                await run(sndFile, rcvFile, sndWindow, `${evalDir}/out/${sndWindow}`, commonFlags.concat(buildFlags));
+    for (let i = 0; i < iterations; i++) {
+        for ({ buildFlags, sndWindows } of configs) {
+            const allFlags = commonFlags.concat(buildFlags);
+            await compileAndCopy(allFlags);
+            for (sndWindow of sndWindows) {
+                for ({ sndFile, rcvFile } of files) {
+                    console.log("\nrun:", buildFlags, sndWindow, sndFile, rcvFile);
+                    const outDir = `${evalDir}/${commonFlags}/iter_${i}/${buildFlags}/${sndWindow}/${sndFile}`;
+                    await run(sndFile, rcvFile, sndWindow, outDir, allFlags);
+                }
             }
         }
     }
