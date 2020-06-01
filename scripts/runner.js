@@ -1,7 +1,7 @@
 const node_ssh = require("node-ssh");
 const util = require("util");
 const fs = require("fs");
-const { writeFileSync, mkdirSync } = fs;
+const { writeFileSync, mkdirSync, appendFileSync } = fs;
 const exec = util.promisify(require("child_process").exec);
 
 const verbose = process.argv.includes("-v");
@@ -69,16 +69,18 @@ const run = async (sndFile, rcvFile, sndWindow, destDir, flags) => {
             vm1ssh.exec("./receiver", ["-o", rcvFile], { cwd: remoteDir }),
             vm2ssh.exec("./sender", ["-f", sndFile, "-w", sndWindow], { cwd: remoteDir }),
         ]);
-        const stdout = `--- flags ---\n${flags.join(" ")}\n--- receiver stdout ---\n${r1}\n--- sender stdout (sndWindow: ${sndWindow}) ---\n${r2}\n---`
-        writeFileSync(`${destDir}/stdout.txt`, stdout);
+        const stdout = `--- flags ---\n${flags.join(" ")}\n--- receiver stdout ---\n${r1}\n--- sender stdout (sndWindow: ${sndWindow}) ---\n${r2}\n---\n`;
+        writeFileSync(`${destDir}/result.txt`, stdout);
         if (verbose) console.log(stdout);
     } catch (error) {
-        writeFileSync(`${destDir}/error.txt`, error.toString());
         if (error.message === "Terminated") {
             console.log("error: receiver timed out");
         } else {
             console.log(error);
+            clearTimeout(killReceiver);
         }
+        writeFileSync(`${destDir}/error.txt`, error.toString());
+        return;
     }
     clearTimeout(killReceiver);
     console.log("binaries executed");
@@ -93,21 +95,31 @@ const run = async (sndFile, rcvFile, sndWindow, destDir, flags) => {
         vm2ssh.getFile(`${destDir}/snd_packets_log.csv`, `${remoteDir}/packets_log.csv`),
     ]);
     console.log("retrieved artifacts");
+
+    // compare and save results
+    const [c1, c2] = await Promise.all([
+        exec(`node packetcompare.js "${destDir}/${sndFile}" "${destDir}/${rcvFile}"`),
+        exec(`node bytecompare.js "${destDir}/${sndFile}" "${destDir}/${rcvFile}"`),
+    ]);
+    const results = `--- packetcompare ---\n${c1.stdout}\n--- bytecompare ---\n${c2.stdout}\n---\n`;
+    appendFileSync(`${destDir}/result.txt`, results);
+    if (verbose) console.log(results);
+    console.log("saved results");
 };
 
 // entry point
 const main = async () => {
     await connect();
 
-    const iterations = 2;
+    const iterations = 1;
     const commonFlags = [ "-DARCH_BROADWELL", "-DNUM_EVICTIONS=6" ];
     const configs = [
         // { snd: "-w 6", rcv: "-r 54" }, // minimum so that 2x rcv during 1x snd (rcv-window 1)
         // { snd: "-w 12", rcv: "-r 54" }, // minimum so that 2x rcv during 1x snd (rcv-window 2)
         // { snd: "-w 16", rcv: "" }, // minimum so that 2x rcv during 1x snd
         {
-            buildFlags: ["-DCHK_CRC8"],
-            sndWindows: [50, 100],
+            buildFlags: ["-DCHK_CRC8 -DREED_SOLOMON=64"],
+            sndWindows: [200],
         }
     ];
     const files = [

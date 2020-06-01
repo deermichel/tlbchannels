@@ -285,6 +285,7 @@ int main(int argc, char **argv) {
     int last_nonzero_byte = decode_rs_blocks(rs_blocks, used_symbols, rs_codec, out, &bytes_ok, &bytes_corrected, &bytes_corrupt);
     int trailing_zero_bytes = RS_DATA_SYMBOLS * PAYLOAD_SIZE - (last_nonzero_byte + 1);
     int length_without_trailing_zeros = ftell(out) - trailing_zero_bytes;
+    fflush(out);
     ftruncate(fileno(out), length_without_trailing_zeros); // remove trailing zero bytes
 
     // rs stats
