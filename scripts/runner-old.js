@@ -12,8 +12,8 @@ const receiverTimeout = 40000; // ms
 const payloadSize = 30; // bytes
 
 const projectDir = `${process.env["HOME"]}/tlbchannels`;
-const binDir = `${projectDir}/bin`;
-const srcDir = `${projectDir}/src`;
+const senderDir = `${projectDir}/src/sender`;
+const receiverDir = `${projectDir}/src/receiver`;
 const evalDir = `${projectDir}/eval`;
 const remoteDir = "/home/user";
 
@@ -30,16 +30,22 @@ const parseLogfile = (csv) => {
 };
 
 // compile locally and copy binaries
-const compileAndCopy = async (buildFlags) => {
+const compileAndCopy = async () => {
     // compile
-    const { stdout } = await exec(`make CFLAGS="${buildFlags.join(" ")}"`, { cwd: srcDir });
-    if (verbose) console.log(stdout);
-    console.log(`compiled (flags: ${buildFlags.join(" ")})`);
+    const [m1, m2] = await Promise.all([
+        exec("make", { cwd: senderDir }),
+        exec("make", { cwd: receiverDir }),
+    ]);
+    if (verbose) {
+        console.log(m1.stdout);
+        console.log(m2.stdout);
+    }
+    console.log("compiled");
 
     // copy binaries
     await Promise.all([
-        vm1ssh.putFile(`${binDir}/receiver`, `${remoteDir}/receiver`),
-        vm2ssh.putFile(`${binDir}/sender`, `${remoteDir}/sender`),
+        vm1ssh.putFile(`${receiverDir}/receiver`, `${remoteDir}/receiver`),
+        vm2ssh.putFile(`${senderDir}/sender`, `${remoteDir}/sender`),
     ]);
     console.log("binaries copied");
 };
@@ -173,38 +179,60 @@ const run = async (sndFile, rcvFile, sndArgs, rcvArgs, destDir) => {
 // entry point
 const main = async () => {
     await connect();
+    await compileAndCopy();
 
     let results = [];
-    const commonFlags = [ "-DARCH_BROADWELL", "-DNUM_EVICTIONS=23" ];
+    // for (let w = 10; w < 50; w += 10) {
+    //     for (let r = 0; r < 2; r++) {
+    //         results.push(await run("text.txt", "out.txt", w, `${evalDir}/w${w}_r${r}`));
+    //     }
+    // }
+    // for (let sw = 28; sw <= 31; sw++) {
+    //     for (let rw = 8; rw <= 9; rw++) {
+    //         for (let t = 3; t <= 5; t++) {
+    //             try {
+    //                 results.push(await run("text.txt", "out.txt", sw, rw, t, `${evalDir}/sw${sw}_rw${rw}_t${t}`));
+    //             } catch (e) {
+    //                 console.log(e);
+    //             }
+    //         }
+    //     }
+    // }
+    // results.push(await run("text.txt", "out.txt", 45, 8, 3, `${evalDir}/out`));
+
+    const files = [
+        // { snd: "json.h", rcv: "out.h" },
+        // { snd: "text.txt", rcv: "out.txt" },
+        { snd: "pic.bmp", rcv: "out.bmp" },
+        // { snd: "beat.mp3", rcv: "out.mp3" },
+    ];
     const configs = [
         // { snd: "-w 6", rcv: "-r 54" }, // minimum so that 2x rcv during 1x snd (rcv-window 1)
         // { snd: "-w 12", rcv: "-r 54" }, // minimum so that 2x rcv during 1x snd (rcv-window 2)
         // { snd: "-w 16", rcv: "" }, // minimum so that 2x rcv during 1x snd
-        {
-            buildFlags: ["-DAS"], 
-            sndWindows: [12, 43, 5],
-        },
-        {
-            buildFlags: ["-DF"],
-            sndWindows: [12, 23, 5],
-        }
-    ];
-    const files = [
-        // { sndFile: "json.h", rcvFile: "out.h" },
-        { sndFile: "text.txt", rcvFile: "out.txt" },
-        { sndFile: "pic.bmp", rcvFile: "out.bmp" },
-        { sndFile: "beat.mp3", rcvFile: "out.mp3" },
+        // { snd: "-w 16", rcv: "-r 54" },
+        // { snd: "-w 60" },
+        // { snd: "-w 90" },
+        { snd: "-w 200" },
     ];
 
-    for ({ buildFlags, sndWindows } of configs) {
-        await compileAndCopy(commonFlags.concat(buildFlags));
-        for (sndWindow of sndWindows) {
-            for ({ sndFile, rcvFile } of files) {
-                console.log(commonFlags.concat(buildFlags), sndWindow, sndFile, rcvFile);
-                // results.push(await run(sndFile, rcvFile, sndArgs, rcvArgs, `${evalDir}/out`));
-            }
+    for ({ snd: sndFile, rcv: rcvFile } of files) {
+        for ({ snd: sndArgs, rcv: rcvArgs } of configs) {
+            results.push(await run(sndFile, rcvFile, sndArgs, rcvArgs, `${evalDir}/out`));
         }
     }
+
+    // results.push(await run("json.h", "out.h", 15, 8, 4, `${evalDir}/out`));
+    // results.push(await run("text.txt", "out.txt", 15, 8, 4, `${evalDir}/out`));
+    // results.push(await run("text.txt", "out.txt", 14, 8, 4, `${evalDir}/out`));
+    // results.push(await run("pic.bmp", "out.bmp", 19, 8, 3, `${evalDir}/out`));
+    // results.push(await run("text.txt", "out.txt", 28, 9, 3, `${evalDir}/out`));
+    // for (let sw = 23; sw <= 31; sw+=2) {
+    //     results.push(await run("text.txt", "out.txt", sw, 8, 3, `${evalDir}/sw_${sw}`));
+    // }
+    results = results.filter((r) => !isNaN(r.bandwidth));
+    // results.sort((r1, r2) => r1.bandwidth - r2.bandwidth);
+    console.log(results.slice(0, 25)); //.map((r) => `${r.rcvThreshold} b: ${r.bandwidth} e: ${r.errorRate}`));
 
     await disconnect();
 }
