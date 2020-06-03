@@ -7,7 +7,7 @@ const exec = util.promisify(require("child_process").exec);
 const verbose = process.argv.includes("-v");
 const vm1address = "192.168.122.190";
 const vm2address = "192.168.122.201";
-const receiverTimeout = 40000; // ms
+const receiverTimeout = 30000; // ms
 
 const projectDir = `${process.env["HOME"]}/tlbchannels`;
 const binDir = `${projectDir}/bin`;
@@ -119,13 +119,12 @@ const main = async () => {
     await connect();
 
     const iterations = 1;
-    // rdtsc threshold: i7-broadwell 67, xeon-skylake 54
-    // rdtsc window: i7-broadwell 1
+    // rdtsc threshold: i7-broadwell 67 (win: 1) or 76 (win: 2), xeon-skylake 54
     // num evictions (rdtsc): i7-broadwell 10
-    const commonFlags = [ "-DARCH_BROADWELL", "-DRDTSC_THRESHOLD=67", "-DRDTSC_WINDOW=1", "-DRECORD_PACKETS" ];
+    const commonFlags = [ "-DARCH_BROADWELL", "-DNUM_EVICTIONS=8", "-DCHK_CRC8" ];
     let configs = [
         {
-            buildFlags: [`-DNUM_EVICTIONS=10 -DCHK_CRC8`],
+            buildFlags: [""],
             sndWindows: [50],
         },
     ];
@@ -134,7 +133,7 @@ const main = async () => {
         // { sndFile: "sender.c", rcvFile: "out.c" },
         // { sndFile: "pic.png", rcvFile: "out.png" },
         // { sndFile: "pic.bmp", rcvFile: "out.bmp" },
-        { sndFile: "beat.mp3", rcvFile: "out.mp3" },
+        // { sndFile: "beat.mp3", rcvFile: "out.mp3" },
     ];
 
     let results = [];
@@ -144,17 +143,8 @@ const main = async () => {
             await compileAndCopy(allFlags);
             for (sndWindow of sndWindows) {
                 for ({ sndFile, rcvFile } of files) {
-                    console.log("\nrun:", buildFlags, sndWindow, sndFile, rcvFile);
                     const outDir = `${evalDir}/${commonFlags}/iter_${i}/${buildFlags}/${sndWindow}/${sndFile}`;
-
                     const output = await run(sndFile, rcvFile, sndWindow, outDir, allFlags);
-                    // console.log(output);
-                    if (output) {
-                        const metric = output.match(/received: (.*),/)[1];
-                        const metric2 = output.match(/packetCorrectness: (.*),/)[1];
-                        console.log({ receivedPackets: metric, correctness: metric2, outDir });
-                        results.push({ receivedPackets: metric, correctness: metric2, outDir });
-                    }
                 }
             }
         }
