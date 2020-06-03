@@ -7,7 +7,7 @@ const exec = util.promisify(require("child_process").exec);
 const verbose = process.argv.includes("-v");
 const vm1address = "192.168.122.190";
 const vm2address = "192.168.122.201";
-const receiverTimeout = 30000; // ms
+const receiverTimeout = 60000; // ms
 
 const projectDir = `${process.env["HOME"]}/tlbchannels`;
 const binDir = `${projectDir}/bin`;
@@ -65,12 +65,28 @@ const disconnect = async () => {
 }
 
 // run config and evaluate results
-const run = async (sndFile, rcvFile, sndWindow, destDir, flags) => {
+const run = async (sndFile, rcvFile, sndWindow, runParallel, destDir, flags) => {
     mkdirSync(destDir, { recursive: true });
+
+    // run parallel
+    if (runParallel.host) {
+        console.log("run parallel on host:", runParallel.host[0]);
+        exec(runParallel.host[0]).catch(() => {});
+    }
+    if (runParallel.vm1) {
+        console.log("run parallel on vm1:", runParallel.vm1[0]);
+        vm1ssh.execCommand(runParallel.vm1[0]);
+    }
+    if (runParallel.vm2) {
+        console.log("run parallel on vm2:", runParallel.vm2[0]);
+        vm2ssh.execCommand(runParallel.vm2[0]);
+    }
+    if (runParallel.sleep) await exec(`sleep ${runParallel.sleep}`); // optional sleep for benchmark startup
 
     // execute binaries
     const killReceiver = setTimeout(() => vm1ssh.execCommand("pkill receiver"), receiverTimeout);
     try {
+        // run covert channel
         const [r1, r2] = await Promise.all([
             vm1ssh.exec("./receiver", ["-o", rcvFile], { cwd: remoteDir }),
             vm2ssh.exec("./sender", ["-f", sndFile, "-w", sndWindow], { cwd: remoteDir }),
@@ -86,10 +102,21 @@ const run = async (sndFile, rcvFile, sndWindow, destDir, flags) => {
         }
         clearTimeout(killReceiver);
         writeFileSync(`${destDir}/error.txt`, error.toString());
+
+        // stop parallel runs
+        if (runParallel.host) await exec(runParallel.host[1]);
+        if (runParallel.vm1) await vm1ssh.execCommand(runParallel.vm1[1]);
+        if (runParallel.vm2) await vm2ssh.execCommand(runParallel.vm2[1]);
+
         return;
     }
     clearTimeout(killReceiver);
     console.log("binaries executed");
+
+    // stop parallel runs
+    if (runParallel.host) await exec(runParallel.host[1]);
+    if (runParallel.vm1) await vm1ssh.execCommand(runParallel.vm1[1]);
+    if (runParallel.vm2) await vm2ssh.execCommand(runParallel.vm2[1]);
 
     // retrieve artifacts
     await Promise.all([
@@ -121,11 +148,17 @@ const main = async () => {
     const iterations = 1;
     // rdtsc threshold: i7-broadwell 67 (win: 1) or 76 (win: 2), xeon-skylake 54
     // num evictions (rdtsc): i7-broadwell 10
-    const commonFlags = [ "-DARCH_BROADWELL", "-DNUM_EVICTIONS=8", "-DCHK_CRC8" ];
+    const commonFlags = [ "-DARCH_BROADWELL", "-DNUM_EVICTIONS=8", "-DCHK_CRC8", "-DREED_SOLOMON=64" ];
     let configs = [
         {
             buildFlags: [""],
-            sndWindows: [50],
+            runParallel: {
+                host: ["taskset -c 3 phoronix-test-suite batch-benchmark mbw", "pkill -f '^Phoronix Test Suite'"],
+                vm2: ["stress -m 1 --vm-bytes 1024M", "pkill stress"],
+                // vm2: ["phoronix-test-suite batch-benchmark pmbench", "pkill -f '^Phoronix Test Suite'"],
+                // sleep: 4,
+            },
+            sndWindows: [100],
         },
     ];
     const files = [
@@ -138,19 +171,19 @@ const main = async () => {
 
     let results = [];
     for (let i = 0; i < iterations; i++) {
-        for ({ buildFlags, sndWindows } of configs) {
+        for ({ buildFlags, runParallel, sndWindows } of configs) {
             const allFlags = commonFlags.concat(buildFlags);
             await compileAndCopy(allFlags);
             for (sndWindow of sndWindows) {
                 for ({ sndFile, rcvFile } of files) {
-                    const outDir = `${evalDir}/${commonFlags}/iter_${i}/${buildFlags}/${sndWindow}/${sndFile}`;
-                    const output = await run(sndFile, rcvFile, sndWindow, outDir, allFlags);
+                    const outDir = `${evalDir}/${commonFlags}/iter_${i}/${buildFlags}/${runParallel}/${sndWindow}/${sndFile}`;
+                    const output = await run(sndFile, rcvFile, sndWindow, runParallel, outDir, allFlags);
                 }
             }
         }
     }
 
-    console.log(results);
+    // console.log(results);
 
     await disconnect();
 }
