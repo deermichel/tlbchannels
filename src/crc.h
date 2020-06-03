@@ -22,8 +22,9 @@ static uint8_t crc8_table[] = {
 
 // calculate crc8
 uint8_t crc8(const uint8_t *data, size_t num_bytes) {
+    size_t i;
     uint8_t crc = 0x00;
-    for (size_t i = 0; i < num_bytes; i++) {
+    for (i = 0; i < num_bytes; i++) {
         crc = crc8_table[(*data++) ^ crc];
     }
     return crc;

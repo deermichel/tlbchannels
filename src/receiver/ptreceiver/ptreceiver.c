@@ -4,6 +4,7 @@
 #include <linux/module.h>
 #include <linux/proc_fs.h>
 #include <linux/slab.h>
+#include "../../crc.h"
 #include "../../packet.h"
 
 // meta
@@ -20,7 +21,7 @@ static pte_t **ptes = NULL;
 static uint8_t **vaddrs = NULL;
 
 // receiver buffer
-#define BUFFER_SIZE 20
+#define BUFFER_SIZE 20000
 static uint8_t *buffer = NULL;
 
 // retrieve pte from page table
@@ -99,6 +100,9 @@ static ssize_t proc_read(struct file *file, char __user *ubuf, size_t count, lof
             last_seq = 0xFF;
             break;
         };
+
+        // checksum
+        if (crc8(packet.raw, PACKET_SIZE) != 0) continue;
 
         // seq
         seq = packet.header[0];

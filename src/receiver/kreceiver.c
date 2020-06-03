@@ -194,6 +194,8 @@ int main(int argc, char **argv) {
     // extract data from packets
     for (int i = 0; i < packets_received; i++) {
         memcpy(packet.raw, &packet_buffer[i * PACKET_SIZE], PACKET_SIZE);
+        printf("%d: ", i);
+        print_packet(&packet);
         fwrite(packet.payload, 1, PAYLOAD_SIZE, out);
     }
     int bytes_total = packets_received * PAYLOAD_SIZE;

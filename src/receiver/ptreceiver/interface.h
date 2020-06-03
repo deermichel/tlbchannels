@@ -9,7 +9,7 @@
 #include "../../memory.h"
 
 // buffer size (must match kernel module)
-#define BUFFER_SIZE 20
+#define BUFFER_SIZE 20000
 
 // file descriptor of kernel module proc file
 static int ptreceiver_fd = -1;
