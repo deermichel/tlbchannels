@@ -1,51 +1,39 @@
 const node_ssh = require("node-ssh");
 const util = require("util");
 const fs = require("fs");
-const readFile = util.promisify(fs.readFile);
-const { writeFileSync, mkdirSync } = fs;
+const { writeFileSync, mkdirSync, appendFileSync } = fs;
 const exec = util.promisify(require("child_process").exec);
 
 const verbose = process.argv.includes("-v");
 const vm1address = "192.168.122.190";
 const vm2address = "192.168.122.201";
-const receiverTimeout = 40000; // ms
-const payloadSize = 30; // bytes
+const receiverTimeout = 60000; // ms
 
 const projectDir = `${process.env["HOME"]}/tlbchannels`;
-const senderDir = `${projectDir}/src/sender`;
-const receiverDir = `${projectDir}/src/receiver`;
+const binDir = `${projectDir}/bin`;
+const srcDir = `${projectDir}/src`;
 const evalDir = `${projectDir}/eval`;
 const remoteDir = "/home/user";
 
 let vm1ssh, vm2ssh;
 
-// parse csv logfile
-const parseLogfile = (csv) => {
-    const rows = csv.split("\n").slice(0, -1).map((row) => row.split(","));
-    const packets = rows.map(([start, end, data]) => ({ 
-        start, end, data,
-        // data: data.split(" ").slice(0, -1),
-    }));
-    return packets;
-};
-
 // compile locally and copy binaries
-const compileAndCopy = async () => {
+const compileAndCopy = async (buildFlags) => {
     // compile
-    const [m1, m2] = await Promise.all([
-        exec("make", { cwd: senderDir }),
-        exec("make", { cwd: receiverDir }),
+    const { stdout } = await exec(`make CFLAGS="${buildFlags.join(" ")}"`, { cwd: srcDir });
+    if (verbose) console.log(stdout);
+    console.log(`compiled (flags: ${buildFlags.join(" ")})`);
+
+    // cleanup stale runs
+    await Promise.all([
+        vm1ssh.execCommand("pkill receiver"),
+        vm2ssh.execCommand("pkill sender"),
     ]);
-    if (verbose) {
-        console.log(m1.stdout);
-        console.log(m2.stdout);
-    }
-    console.log("compiled");
 
     // copy binaries
     await Promise.all([
-        vm1ssh.putFile(`${receiverDir}/receiver`, `${remoteDir}/receiver`),
-        vm2ssh.putFile(`${senderDir}/sender`, `${remoteDir}/sender`),
+        vm1ssh.putFile(`${binDir}/receiver`, `${remoteDir}/receiver`),
+        vm2ssh.putFile(`${binDir}/sender`, `${remoteDir}/sender`),
     ]);
     console.log("binaries copied");
 };
@@ -77,162 +65,125 @@ const disconnect = async () => {
 }
 
 // run config and evaluate results
-const run = async (sndFile, rcvFile, sndArgs, rcvArgs, destDir) => {
-    console.log(`[sndFile: ${sndFile} | rcvFile: ${rcvFile} | sndArgs: ${sndArgs} | rcvArgs: ${rcvArgs}]`);
+const run = async (sndFile, rcvFile, sndWindow, runParallel, destDir, flags) => {
     mkdirSync(destDir, { recursive: true });
+
+    // run parallel
+    if (runParallel.host) {
+        console.log("run parallel on host:", runParallel.host[0]);
+        exec(runParallel.host[0]).catch(() => {});
+    }
+    if (runParallel.vm1) {
+        console.log("run parallel on vm1:", runParallel.vm1[0]);
+        vm1ssh.execCommand(runParallel.vm1[0]);
+    }
+    if (runParallel.vm2) {
+        console.log("run parallel on vm2:", runParallel.vm2[0]);
+        vm2ssh.execCommand(runParallel.vm2[0]);
+    }
+    if (runParallel.sleep) await exec(`sleep ${runParallel.sleep}`); // optional sleep for benchmark startup
 
     // execute binaries
     const killReceiver = setTimeout(() => vm1ssh.execCommand("pkill receiver"), receiverTimeout);
-    let transferDuration = "timeout";
-    let sendDuration = "timeout";
     try {
+        // run covert channel
         const [r1, r2] = await Promise.all([
-            vm1ssh.exec("./receiver", ["-o", rcvFile, rcvArgs], { cwd: remoteDir }),
-            vm2ssh.exec("./sender", ["-f", sndFile, sndArgs], { cwd: remoteDir }),
+            vm1ssh.exec("./receiver", ["-o", rcvFile], { cwd: remoteDir }),
+            vm2ssh.exec("./sender", ["-f", sndFile, "-w", sndWindow], { cwd: remoteDir }),
         ]);
-        transferDuration = parseFloat(r1.match(/time: (.*) s/)[1]);
-        sendDuration = parseFloat(r2.match(/time: (.*) s/)[1]);
-        if (verbose) {
-            console.log("--- receiver stdout ---");
-            console.log(r1);
-            console.log("--- sender stdout ---");
-            console.log(r2);
-            console.log("---");
-        }
+        const stdout = `--- flags ---\n${flags.join(" ")}\n--- receiver stdout ---\n${r1}\n--- sender stdout (sndWindow: ${sndWindow}) ---\n${r2}\n---\n`;
+        writeFileSync(`${destDir}/result.txt`, stdout);
+        if (verbose) console.log(stdout);
     } catch (error) {
         if (error.message === "Terminated") {
             console.log("error: receiver timed out");
         } else {
             console.log(error);
         }
-        
+        clearTimeout(killReceiver);
+        writeFileSync(`${destDir}/error.txt`, error.toString());
+
+        // stop parallel runs
+        if (runParallel.host) await exec(runParallel.host[1]);
+        if (runParallel.vm1) await vm1ssh.execCommand(runParallel.vm1[1]);
+        if (runParallel.vm2) await vm2ssh.execCommand(runParallel.vm2[1]);
+
+        return;
     }
-    clearInterval(killReceiver);
+    clearTimeout(killReceiver);
     console.log("binaries executed");
+
+    // stop parallel runs
+    if (runParallel.host) await exec(runParallel.host[1]);
+    if (runParallel.vm1) await vm1ssh.execCommand(runParallel.vm1[1]);
+    if (runParallel.vm2) await vm2ssh.execCommand(runParallel.vm2[1]);
 
     // retrieve artifacts
     await Promise.all([
-        vm1ssh.getFile(`${destDir}/rcv_packets_log.csv`, `${remoteDir}/packets_log.csv`),
         vm1ssh.getFile(`${destDir}/${rcvFile}`, `${remoteDir}/${rcvFile}`),
+        vm2ssh.getFile(`${destDir}/${sndFile}`, `${remoteDir}/${sndFile}`),
+    ]);
+    if (flags.includes("-DRECORD_PACKETS")) await Promise.all([
+        vm1ssh.getFile(`${destDir}/rcv_packets_log.csv`, `${remoteDir}/packets_log.csv`),
         vm2ssh.getFile(`${destDir}/snd_packets_log.csv`, `${remoteDir}/packets_log.csv`),
-        // vm2ssh.getFile(`${destDir}/${sndFile}`, `${remoteDir}/${sndFile}`),
     ]);
     console.log("retrieved artifacts");
 
-    // read logs
-    const [sndLog, rcvLog] = await Promise.all([
-        readFile(`${destDir}/snd_packets_log.csv`, "utf8"),
-        readFile(`${destDir}/rcv_packets_log.csv`, "utf8"),
+    // compare and save results
+    const [c1, c2] = await Promise.all([
+        exec(`node packetcompare.js "${destDir}/${sndFile}" "${destDir}/${rcvFile}"`),
+        exec(`node bytecompare.js "${destDir}/${sndFile}" "${destDir}/${rcvFile}"`),
     ]);
-    const sndPackets = parseLogfile(sndLog).map((packet) => packet.data);
-    const rcvPackets = parseLogfile(rcvLog).map((packet) => packet.data);
-
-    // compare data
-    let correctPackets = 0;
-    let lostPackets = 0;
-    let insertedPackets = 0;
-    let sndOffset = 0;
-    for (let rcvIndex = 0; rcvIndex < rcvPackets.length; rcvIndex++) {
-        // console.log(rcvIndex, rcvPackets.length);
-        const rcv = rcvPackets[rcvIndex];
-
-        let found = false;
-
-        for (let sndIndex = sndOffset; sndIndex < sndPackets.length; sndIndex++) {
-            const snd = sndPackets[sndIndex];
-
-            if (snd === rcv) {
-                lostPackets += sndIndex - sndOffset;
-                sndOffset = sndIndex + 1;
-                correctPackets++;
-                found = true;
-                break;
-            }
-        }
-
-        if (!found) {
-            insertedPackets++;
-        }
-    }
-    lostPackets += sndPackets.length - sndOffset;
-
-    // results
-    const results = {
-        sndFile, rcvFile, sndArgs, rcvArgs,
-        lostPackets, insertedPackets, transferDuration, sendDuration, correctPackets,
-        sentPackets: sndPackets.length,
-        receivedPackets: rcvPackets.length,
-        sentBytes: sndPackets.length * payloadSize,
-        receivedBytes: rcvPackets.length * payloadSize,
-        bandwidth: ((correctPackets * payloadSize) / transferDuration) / 1000, // kB/s
-        maxBandwidth: ((sndPackets.length * payloadSize) / sendDuration) / 1000, // kB/s
-        rawBandwidth: ((rcvPackets.length * payloadSize) / transferDuration) / 1000, // kB/s
-        errorRate: 1 - (correctPackets / sndPackets.length),
-    };
-    writeFileSync(`${destDir}/results.json`, JSON.stringify(results, null, 4));
-    if (verbose && transferDuration !== "timeout") console.log("results:", results);
-    console.log("results saved");
-
+    const results = `--- packetcompare ---\n${c1.stdout}\n--- bytecompare ---\n${c2.stdout}\n---\n`;
+    appendFileSync(`${destDir}/result.txt`, results);
+    if (verbose) console.log(results);
+    console.log("saved results");
     return results;
 };
 
 // entry point
 const main = async () => {
     await connect();
-    await compileAndCopy();
+
+    const iterations = 1;
+    // rdtsc threshold: i7-broadwell 67 (win: 1) or 76 (win: 2), xeon-skylake 54
+    // num evictions (rdtsc): i7-broadwell 10
+    const commonFlags = [ "-DARCH_BROADWELL", "-DNUM_EVICTIONS=8", "-DCHK_CRC8", "-DREED_SOLOMON=64" ];
+    let configs = [
+        {
+            buildFlags: [""],
+            runParallel: {
+                host: ["taskset -c 3 phoronix-test-suite batch-benchmark mbw", "pkill -f '^Phoronix Test Suite'"],
+                vm2: ["stress -m 1 --vm-bytes 1024M", "pkill stress"],
+                // vm2: ["phoronix-test-suite batch-benchmark pmbench", "pkill -f '^Phoronix Test Suite'"],
+                // sleep: 4,
+            },
+            sndWindows: [100],
+        },
+    ];
+    const files = [
+        { sndFile: "json.h", rcvFile: "out.h" },
+        // { sndFile: "sender.c", rcvFile: "out.c" },
+        // { sndFile: "pic.png", rcvFile: "out.png" },
+        // { sndFile: "pic.bmp", rcvFile: "out.bmp" },
+        // { sndFile: "beat.mp3", rcvFile: "out.mp3" },
+    ];
 
     let results = [];
-    // for (let w = 10; w < 50; w += 10) {
-    //     for (let r = 0; r < 2; r++) {
-    //         results.push(await run("text.txt", "out.txt", w, `${evalDir}/w${w}_r${r}`));
-    //     }
-    // }
-    // for (let sw = 28; sw <= 31; sw++) {
-    //     for (let rw = 8; rw <= 9; rw++) {
-    //         for (let t = 3; t <= 5; t++) {
-    //             try {
-    //                 results.push(await run("text.txt", "out.txt", sw, rw, t, `${evalDir}/sw${sw}_rw${rw}_t${t}`));
-    //             } catch (e) {
-    //                 console.log(e);
-    //             }
-    //         }
-    //     }
-    // }
-    // results.push(await run("text.txt", "out.txt", 45, 8, 3, `${evalDir}/out`));
-
-    const files = [
-        { snd: "json.h", rcv: "out.h" },
-        // { snd: "text.txt", rcv: "out.txt" },
-        // { snd: "pic.bmp", rcv: "out.bmp" },
-        // { snd: "beat.mp3", rcv: "out.mp3" },
-    ];
-    const configs = [
-        // { snd: "-w 6", rcv: "-r 54" }, // minimum so that 2x rcv during 1x snd (rcv-window 1)
-        // { snd: "-w 12", rcv: "-r 54" }, // minimum so that 2x rcv during 1x snd (rcv-window 2)
-        // { snd: "-w 16", rcv: "" }, // minimum so that 2x rcv during 1x snd
-        // { snd: "-w 16", rcv: "-r 54" },
-        // { snd: "-w 60" },
-        // { snd: "-w 90" },
-        { snd: "-w 180" },
-    ];
-
-    for ({ snd: sndFile, rcv: rcvFile } of files) {
-        for ({ snd: sndArgs, rcv: rcvArgs } of configs) {
-            results.push(await run(sndFile, rcvFile, sndArgs, rcvArgs, `${evalDir}/out`));
+    for (let i = 0; i < iterations; i++) {
+        for ({ buildFlags, runParallel, sndWindows } of configs) {
+            const allFlags = commonFlags.concat(buildFlags);
+            await compileAndCopy(allFlags);
+            for (sndWindow of sndWindows) {
+                for ({ sndFile, rcvFile } of files) {
+                    const outDir = `${evalDir}/${commonFlags}/iter_${i}/${buildFlags}/${runParallel}/${sndWindow}/${sndFile}`;
+                    const output = await run(sndFile, rcvFile, sndWindow, runParallel, outDir, allFlags);
+                }
+            }
         }
     }
 
-    // results.push(await run("json.h", "out.h", 15, 8, 4, `${evalDir}/out`));
-    // results.push(await run("text.txt", "out.txt", 15, 8, 4, `${evalDir}/out`));
-    // results.push(await run("text.txt", "out.txt", 14, 8, 4, `${evalDir}/out`));
-    // results.push(await run("pic.bmp", "out.bmp", 19, 8, 3, `${evalDir}/out`));
-    // results.push(await run("text.txt", "out.txt", 28, 9, 3, `${evalDir}/out`));
-    // for (let sw = 23; sw <= 31; sw+=2) {
-    //     results.push(await run("text.txt", "out.txt", sw, 8, 3, `${evalDir}/sw_${sw}`));
-    // }
-    results = results.filter((r) => !isNaN(r.bandwidth));
-    // results.sort((r1, r2) => r1.bandwidth - r2.bandwidth);
-    console.log(results.slice(0, 25)); //.map((r) => `${r.rcvThreshold} b: ${r.bandwidth} e: ${r.errorRate}`));
+    // console.log(results);
 
     await disconnect();
 }

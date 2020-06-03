@@ -1,7 +1,5 @@
 // command-line interface stuff
 
-// TODO: fix weird output in --help
-
 #ifndef CLI_H
 #define CLI_H
 
@@ -9,7 +7,7 @@
 #include <stdbool.h>
 
 // meta
-const char *argp_program_version = "sender 0.1";
+const char *argp_program_version = "sender 1.0";
 const char *argp_program_bug_address = "https://github.com/deermichel/tlbchannels/issues";
 static char doc[] = "sender for tlb-based covert channels";
 
@@ -34,7 +32,7 @@ static struct {
 } args = { 
     // defaults
     .verbose = false,
-    .window = 1000,
+    .window = 200,
     .string = "",
 };
 
