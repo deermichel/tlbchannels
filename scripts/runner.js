@@ -5,8 +5,9 @@ const { writeFileSync, mkdirSync, appendFileSync } = fs;
 const exec = util.promisify(require("child_process").exec);
 
 const verbose = process.argv.includes("-v");
-const vm1address = "192.168.122.190";
-const vm2address = "192.168.122.201";
+const vm1address = "192.168.122.84";
+const vm2address = "192.168.122.63";
+const vm3address = "192.168.122.85";
 const receiverTimeout = 60000; // ms
 
 const projectDir = `${process.env["HOME"]}/tlbchannels`;
@@ -15,7 +16,7 @@ const srcDir = `${projectDir}/src`;
 const evalDir = `${projectDir}/eval`;
 const remoteDir = "/home/user";
 
-let vm1ssh, vm2ssh;
+let vm1ssh, vm2ssh, vm3ssh;
 
 // compile locally and copy binaries
 const compileAndCopy = async (buildFlags) => {
@@ -42,6 +43,7 @@ const compileAndCopy = async (buildFlags) => {
 const connect = async () => {
     vm1ssh = new node_ssh();
     vm2ssh = new node_ssh();
+    vm3ssh = new node_ssh();
     await Promise.all([
         vm1ssh.connect({
             host: vm1address,
@@ -53,6 +55,11 @@ const connect = async () => {
             username: "user",
             privateKey: `${process.env["HOME"]}/.ssh/id_rsa`
         }),
+        vm3ssh.connect({
+            host: vm3address,
+            username: "user",
+            privateKey: `${process.env["HOME"]}/.ssh/id_rsa`
+        }),
     ]);
     console.log("ssh connected");
 };
@@ -61,6 +68,7 @@ const connect = async () => {
 const disconnect = async () => {
     vm1ssh.dispose();
     vm2ssh.dispose();
+    vm3ssh.dispose();
     console.log("ssh disconnected");
 }
 
@@ -80,6 +88,10 @@ const run = async (sndFile, rcvFile, sndWindow, runParallel, destDir, flags) => 
     if (runParallel.vm2) {
         console.log("run parallel on vm2:", runParallel.vm2[0]);
         vm2ssh.execCommand(runParallel.vm2[0]);
+    }
+    if (runParallel.vm3) {
+        console.log("run parallel on vm3:", runParallel.vm3[0]);
+        vm3ssh.execCommand(runParallel.vm3[0]);
     }
     if (runParallel.sleep) await exec(`sleep ${runParallel.sleep}`); // optional sleep for benchmark startup
 
@@ -107,6 +119,7 @@ const run = async (sndFile, rcvFile, sndWindow, runParallel, destDir, flags) => 
         if (runParallel.host) await exec(runParallel.host[1]);
         if (runParallel.vm1) await vm1ssh.execCommand(runParallel.vm1[1]);
         if (runParallel.vm2) await vm2ssh.execCommand(runParallel.vm2[1]);
+        if (runParallel.vm3) await vm3ssh.execCommand(runParallel.vm3[1]);
 
         return;
     }
@@ -117,6 +130,7 @@ const run = async (sndFile, rcvFile, sndWindow, runParallel, destDir, flags) => 
     if (runParallel.host) await exec(runParallel.host[1]);
     if (runParallel.vm1) await vm1ssh.execCommand(runParallel.vm1[1]);
     if (runParallel.vm2) await vm2ssh.execCommand(runParallel.vm2[1]);
+    if (runParallel.vm3) await vm3ssh.execCommand(runParallel.vm3[1]);
 
     // retrieve artifacts
     await Promise.all([
@@ -153,12 +167,12 @@ const main = async () => {
         {
             buildFlags: [""],
             runParallel: {
-                host: ["taskset -c 3 phoronix-test-suite batch-benchmark mbw", "pkill -f '^Phoronix Test Suite'"],
-                vm2: ["stress -m 1 --vm-bytes 1024M", "pkill stress"],
+                // host: ["taskset -c 3 phoronix-test-suite batch-benchmark mbw", "pkill -f '^Phoronix Test Suite'"],
+                // vm3: ["stress -m 1 --vm-bytes 128M", "pkill stress"],
                 // vm2: ["phoronix-test-suite batch-benchmark pmbench", "pkill -f '^Phoronix Test Suite'"],
                 // sleep: 4,
             },
-            sndWindows: [100],
+            sndWindows: [400],
         },
     ];
     const files = [
