@@ -21,7 +21,7 @@ static pte_t **ptes = NULL;
 static uint8_t **vaddrs = NULL;
 
 // receiver buffer
-#define BUFFER_SIZE 20000
+#define BUFFER_SIZE (4096 / PACKET_SIZE) // must fit in a 4k page (e.g. 128 packets * 32 byte packet size)
 static uint8_t *buffer = NULL;
 
 // retrieve pte from page table

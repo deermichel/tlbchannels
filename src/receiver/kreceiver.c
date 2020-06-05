@@ -109,17 +109,12 @@ int main(int argc, char **argv) {
     packet_t packet;
     uint32_t packets_received = 0;
     struct timespec first_packet_time, now;
-    clock_gettime(CLOCK_MONOTONIC, &first_packet_time);
     while (1) {
         int received = ptreceiver_fill_buffer();
         fwrite(buffer, 1, received * PACKET_SIZE, temp_out);
         fflush(temp_out);
+        if (packets_received == 0) clock_gettime(CLOCK_MONOTONIC, &first_packet_time);
         packets_received += received;
-        for (int i = 0; i < received; i++) {
-            memcpy(packet.raw, &buffer[PACKET_SIZE * i], PACKET_SIZE);
-            printf("%d: ", i);
-            print_packet(&packet);
-        }
         if (received < BUFFER_SIZE) break;
     }
 
@@ -194,8 +189,10 @@ int main(int argc, char **argv) {
     // extract data from packets
     for (int i = 0; i < packets_received; i++) {
         memcpy(packet.raw, &packet_buffer[i * PACKET_SIZE], PACKET_SIZE);
-        printf("%d: ", i);
-        print_packet(&packet);
+        if (args.verbose) {
+            printf("%d: ", i);
+            print_packet(&packet);
+        }
         fwrite(packet.payload, 1, PAYLOAD_SIZE, out);
     }
     int bytes_total = packets_received * PAYLOAD_SIZE;
