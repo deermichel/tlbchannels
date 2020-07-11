@@ -16,6 +16,7 @@ package-lock.json
 # binaries
 bin/
 src/disturb
+src/receiver/noise
 
 # misc
 .vscode
