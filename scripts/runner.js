@@ -8,7 +8,7 @@ const verbose = process.argv.includes("-v");
 const vm1address = "192.168.122.84";
 const vm2address = "192.168.122.63";
 const vm3address = "192.168.122.85";
-const receiverTimeout = 60000; // ms
+const receiverTimeout = 3000; // ms
 
 const projectDir = `${process.env["HOME"]}/tlbchannels`;
 const binDir = `${projectDir}/bin`;
@@ -55,11 +55,11 @@ const connect = async () => {
             username: "user",
             privateKey: `${process.env["HOME"]}/.ssh/id_rsa`
         }),
-        vm3ssh.connect({
-            host: vm3address,
-            username: "user",
-            privateKey: `${process.env["HOME"]}/.ssh/id_rsa`
-        }),
+        // vm3ssh.connect({
+        //     host: vm3address,
+        //     username: "user",
+        //     privateKey: `${process.env["HOME"]}/.ssh/id_rsa`
+        // }),
     ]);
     console.log("ssh connected");
 };
@@ -159,24 +159,24 @@ const run = async (sndFile, rcvFile, sndWindow, runParallel, destDir, flags) => 
 const main = async () => {
     await connect();
 
-    const iterations = 1;
+    const iterations = 10;
     // rdtsc threshold: i7-broadwell 67 (win: 1) or 76 (win: 2), xeon-skylake 54
     // num evictions (rdtsc): i7-broadwell 10
-    const commonFlags = [ "-DARCH_BROADWELL", "-DNUM_EVICTIONS=8", "-DCHK_CRC8", "-DREED_SOLOMON=64" ];
+    const commonFlags = [ "-DARCH_BROADWELL", "-DNUM_EVICTIONS=6", "-DCHK_CRC8" ];
     let configs = [
         {
-            buildFlags: [""],
+            buildFlags: [],
             runParallel: {
                 // host: ["taskset -c 3 phoronix-test-suite batch-benchmark mbw", "pkill -f '^Phoronix Test Suite'"],
                 // vm3: ["stress -m 1 --vm-bytes 128M", "pkill stress"],
                 // vm2: ["phoronix-test-suite batch-benchmark pmbench", "pkill -f '^Phoronix Test Suite'"],
                 // sleep: 4,
             },
-            sndWindows: [400],
+            sndWindows: [...Array(31).keys()].map((i) => (i+5) * 10),
         },
     ];
     const files = [
-        { sndFile: "json.h", rcvFile: "out.h" },
+        { sndFile: "genesis.txt", rcvFile: "out.txt" },
         // { sndFile: "sender.c", rcvFile: "out.c" },
         // { sndFile: "pic.png", rcvFile: "out.png" },
         // { sndFile: "pic.bmp", rcvFile: "out.bmp" },
@@ -190,7 +190,8 @@ const main = async () => {
             await compileAndCopy(allFlags);
             for (sndWindow of sndWindows) {
                 for ({ sndFile, rcvFile } of files) {
-                    const outDir = `${evalDir}/${commonFlags}/iter_${i}/${buildFlags}/${runParallel}/${sndWindow}/${sndFile}`;
+                    // const outDir = `${evalDir}/${commonFlags}/iter_${i}/${buildFlags}/${runParallel}/${sndWindow}/${sndFile}`;
+                    const outDir = `${evalDir}/first,${sndWindow},${i}`;
                     const output = await run(sndFile, rcvFile, sndWindow, runParallel, outDir, allFlags);
                 }
             }
