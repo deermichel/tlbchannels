@@ -17,6 +17,7 @@ package-lock.json
 bin/
 src/disturb
 src/receiver/noise
+src/zeroones
 
 # misc
 .vscode
