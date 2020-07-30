@@ -8,7 +8,7 @@ const verbose = process.argv.includes("-v");
 const vm1address = "192.168.122.84";
 const vm2address = "192.168.122.63";
 const vm3address = "192.168.122.85";
-const receiverTimeout = 3000; // ms
+const receiverTimeout = 10000; // ms
 
 const projectDir = `${process.env["HOME"]}/tlbchannels`;
 const binDir = `${projectDir}/bin`;
@@ -162,6 +162,20 @@ const main = async () => {
     const iterations = 10;
     // rdtsc threshold: i7-broadwell 67 (win: 1) or 76 (win: 2), xeon-skylake 54
     // num evictions (rdtsc): i7-broadwell 10
+    // const commonFlags = [ "-DARCH_BROADWELL", "-DCHK_CRC8" ];
+    // let configs = [5, 6, 7, 8, 9].map((evic) => (
+    //     {
+    //         buildFlags: [`-DNUM_EVICTIONS=${evic}`],
+    //         runParallel: {
+    //             // host: ["taskset -c 3 phoronix-test-suite batch-benchmark mbw", "pkill -f '^Phoronix Test Suite'"],
+    //             // vm3: ["stress -m 1 --vm-bytes 128M", "pkill stress"],
+    //             // vm2: ["phoronix-test-suite batch-benchmark pmbench", "pkill -f '^Phoronix Test Suite'"],
+    //             // sleep: 4,
+    //         },
+    //         sndWindows: [120],
+    //         evic,
+    //     }
+    // ));
     const commonFlags = [ "-DARCH_BROADWELL", "-DNUM_EVICTIONS=6", "-DCHK_CRC8" ];
     let configs = [
         {
@@ -176,8 +190,8 @@ const main = async () => {
         },
     ];
     const files = [
-        { sndFile: "genesis.txt", rcvFile: "out.txt" },
-        // { sndFile: "sender.c", rcvFile: "out.c" },
+        // { sndFile: "genesis.txt", rcvFile: "out.txt" },
+        { sndFile: "json.h", rcvFile: "out.h" },
         // { sndFile: "pic.png", rcvFile: "out.png" },
         // { sndFile: "pic.bmp", rcvFile: "out.bmp" },
         // { sndFile: "beat.mp3", rcvFile: "out.mp3" },
@@ -191,7 +205,7 @@ const main = async () => {
             for (sndWindow of sndWindows) {
                 for ({ sndFile, rcvFile } of files) {
                     // const outDir = `${evalDir}/${commonFlags}/iter_${i}/${buildFlags}/${runParallel}/${sndWindow}/${sndFile}`;
-                    const outDir = `${evalDir}/first,${sndWindow},${i}`;
+                    const outDir = `${evalDir}/002/002,${sndWindow},${i}`;
                     const output = await run(sndFile, rcvFile, sndWindow, runParallel, outDir, allFlags);
                 }
             }

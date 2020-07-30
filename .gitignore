@@ -24,7 +24,6 @@ src/zeroones
 
 # logging
 *.tmp
-*.csv
 eval/
 
 # test files
