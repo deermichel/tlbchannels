@@ -2,7 +2,7 @@ const util = require("util");
 const fs = require("fs");
 const glob = require("glob");
 const { parse } = require("path");
-const { writeFileSync, mkdirSync, appendFileSync, readFileSync } = fs;
+const { writeFileSync, mkdirSync, existsSync, readFileSync } = fs;
 const readFile = util.promisify(fs.readFile);
 
 const parseFile = (file) => {
@@ -20,9 +20,13 @@ const parseFile = (file) => {
 
 // entry point
 const main = () => {
-    let result = "config,sndwindow,iter,bandwidth,byteerror,packeterror\n";
+    let result = "scen,evict,file,sndwindow,rs,iter,bandwidth,byteerror,packeterror\n";
     glob(process.argv[2] + "/**/result.txt", (err, files) => {
-        files.forEach((f) => result += `${parseFile(f)}\n`);
+        files.forEach((f) => {
+            if (existsSync(f.replace("result.txt", "finish.txt"))) {
+                result += `${parseFile(f)}\n`;
+            }
+        });
         writeFileSync("result.csv", result);
     });
 };
