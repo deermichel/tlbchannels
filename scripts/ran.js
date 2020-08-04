@@ -1,7 +1,7 @@
 const node_ssh = require("node-ssh");
 const util = require("util");
 const fs = require("fs");
-const { writeFileSync, mkdirSync, appendFileSync, existsSync } = fs;
+const { writeFileSync, mkdirSync, appendFileSync } = fs;
 const exec = util.promisify(require("child_process").exec);
 
 const verbose = process.argv.includes("-v");
@@ -159,126 +159,73 @@ const run = async (sndFile, rcvFile, sndWindow, runParallel, destDir, flags) => 
 const main = async () => {
     await connect();
 
-    const iterations = 3;
-    // rdtsc threshold: i7-broadwell 67 (win: 1) or 76 (win: 2), xeon-skylake 54, xeon-broad 72 (win: 2, 10 evic)
-    // num evictions (rdtsc): i7-broadwell 10
-    // const commonFlags = [ "-DARCH_BROADWELL", "-DCHK_CRC8" ];
-    // const commonFlags = [ "-DARCH_BROADWELL", "-DCHK_CRC8", "-DNUM_EVICTIONS=12", "-DRDTSC_WINDOW=2", "-DRDTSC_THRESHOLD=74" ];
-    // let configs = [7,8,9].map((evic) => (
-    //     {
-    //         buildFlags: [`-DNUM_EVICTIONS=${evic}`],
-    //         runParallel: {
-    //             // host: ["taskset -c 3 phoronix-test-suite batch-benchmark mbw", "pkill -f '^Phoronix Test Suite'"],
-    //             // vm3: ["stress -m 1 --vm-bytes 128M", "pkill stress"],
-            // vm2: ["~/disturb 128", "pkill disturb"],
-    //             // vm2: ["phoronix-test-suite batch-benchmark memcached", "pkill -f '^Phoronix Test Suite' && pkill -f 'memcached'"],
-                // vm2: ["phoronix-test-suite batch-benchmark pmbench", "pkill -f '^Phoronix Test Suite'; pkill pmbench"], sleep:10
-            // vm3: ["phoronix-test-suite batch-benchmark mcperf", "pkill -f '^Phoronix Test Suite'; pkill memcached"],
-    //             // sleep: 4,
-    //         },
-    //         // sndWindows: [...Array(20).keys()].map((i) => (i+1) * 5),
-    //         sndWindows: [90, 100, 110, 120, 130, 140],
-    //         evic
-    //     }
-    // ));
-    let configs = [];
-    const commonFlags = [ "-DARCH_BROADWELL", "-DNUM_EVICTIONS=8", "-DCHK_CRC8" ];
-    let sndWindows = [120, 480, 960];
-    configs.push({
-        buildFlags: [],
-        sndWindows, bench: "idle",
-        runParallel: {}
-    },
-    {
-        buildFlags: [],
-        sndWindows, bench: "vm1-pmbench",
-        runParallel: {
-            vm1: ["phoronix-test-suite batch-benchmark pmbench", "pkill -f '^Phoronix Test Suite'; pkill pmbench"], 
-            sleep: 15,
-        },
-    },
-    {
-        buildFlags: [],
-        sndWindows, bench: "vm2-pmbench",
-        runParallel: {
-            vm2: ["phoronix-test-suite batch-benchmark pmbench", "pkill -f '^Phoronix Test Suite'; pkill pmbench"], 
-            sleep: 15,
-        },
-    },
-    {
-        buildFlags: [],
-        sndWindows, bench: "vm3-pmbench",
-        runParallel: {
+    const scenarios = {
+        idle: {},
+        vm3_pmbench_s13: {
             vm3: ["phoronix-test-suite batch-benchmark pmbench", "pkill -f '^Phoronix Test Suite'; pkill pmbench"], 
+            sleep: 13,
+        },
+        vm3_nginx_s15: {
+            vm3: ["phoronix-test-suite batch-benchmark nginx", "pkill -f '^Phoronix Test Suite'; pkill nginx"], 
             sleep: 15,
         },
-    },
-    {
-        buildFlags: [],
-        sndWindows, bench: "host-pmbench",
-        runParallel: {
-            host: ["taskset -c 4,14 phoronix-test-suite batch-benchmark pmbench", "pkill -f '^Phoronix Test Suite'; pkill pmbench"], 
-            sleep: 15,
-        },
-    },
-    {
-        buildFlags: [],
-        sndWindows, bench: "vm1-mcperf",
-        runParallel: {
-            vm1: ["phoronix-test-suite batch-benchmark mcperf", "pkill -f '^Phoronix Test Suite'; pkill memcached"], 
-            sleep: 15,
-        },
-    },
-    {
-        buildFlags: [],
-        sndWindows, bench: "vm2-mcperf",
-        runParallel: {
-            vm2: ["phoronix-test-suite batch-benchmark mcperf", "pkill -f '^Phoronix Test Suite'; pkill memcached"], 
-            sleep: 15,
-        },
-    },
-    {
-        buildFlags: [],
-        sndWindows, bench: "vm3-mcperf",
-        runParallel: {
-            vm3: ["phoronix-test-suite batch-benchmark mcperf", "pkill -f '^Phoronix Test Suite'; pkill memcached"], 
-            sleep: 15,
-        },
-    },
-    );
-    // console.log(configs);
-    // process.exit(0);
-
+    };
     const files = [
         { sndFile: "genesis.txt", rcvFile: "out.txt" },
         // { sndFile: "json.h", rcvFile: "out.h" },
-        // { sndFile: "pic.png", rcvFile: "out.png" },
         // { sndFile: "pic.bmp", rcvFile: "out.bmp" },
         // { sndFile: "beat.mp3", rcvFile: "out.mp3" },
     ];
+    const checksums = [["crc8", "-DCHK_CRC8"], ["berger", "-DCHK_BERGER"], ["custom", "-DCHK_CUSTOM"]];
+    const evictions = [8,9,7];
+    const sndWindows = [80,100,120,240,480,720,960,1280];
+    const rss = [0,32,64,96];
 
-    // TODO: finish flag to skip runned tests
-    let results = [];
-    for (let i = 0; i < iterations; i++) {
-        for ({ buildFlags, runParallel, sndWindows, thres, check, window, evic, bench } of configs) {
-            const allFlags = commonFlags.concat(buildFlags);
-            await compileAndCopy(allFlags);
-            for (sndWindow of sndWindows) {
+    let notFinished = [];
+    for (let scen in scenarios) {
+        for (let evict of evictions) {
+            for (let [check] of checksums) {
                 for ({ sndFile, rcvFile } of files) {
-                    // const outDir = `${evalDir}/${commonFlags}/iter_${i}/${buildFlags}/${runParallel}/${sndWindow}/${sndFile}`;
-                    const outDir = `${evalDir}/019/nors,${bench},${sndWindow},${i}`;
-                    if (!existsSync(`${outDir}/finish.txt`)) {
-                        await run(sndFile, rcvFile, sndWindow, runParallel, outDir, allFlags);
-                        writeFileSync(`${outDir}/finish.txt`, new Date().toISOString());
-                    } else {
-                        console.log("skipping");
+                    for (sndWindow of sndWindows) {
+                        for (rs of rss) {
+                            for (let iter = 0; iter < 10; iter++) {
+                                const config = `${scen},${evict},${check},${sndFile},${sndWindow},${rs},${iter}`;
+                                if (!fs.existsSync(`${evalDir}/ab00/${config}/finish.txt`)) {
+                                    notFinished.push(config);
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
     }
+    console.log("not finished:", notFinished.length);
 
-    // console.log(results);
+    for (let scen in scenarios) {
+        for (let evict of evictions) {
+            for (let [check, checkFlag] of checksums) {
+                for ({ sndFile, rcvFile } of files) {
+                    for (sndWindow of sndWindows) {
+                        for (rs of rss) {
+                            for (let iter = 0; iter < 10; iter++) {
+                                const config = `${scen},${evict},${check},${sndFile},${sndWindow},${rs},${iter}`;
+                                if (notFinished.includes(config)) {
+                                    console.log(config);
+                                    const outDir = `${evalDir}/ab00/${config}`;
+                                    const buildFlags = ["-DARCH_BROADWELL", `-DNUM_EVICTIONS=${evict}`, checkFlag];
+                                    if (rs > 0) buildFlags.push(`-DREED_SOLOMON=${rs}`);
+                                    await compileAndCopy(buildFlags);
+                                    await run(sndFile, rcvFile, sndWindow, scenarios[scen], outDir, buildFlags);
+                                    writeFileSync(`${outDir}/finish.txt`, new Date().toISOString());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     await disconnect();
 }
