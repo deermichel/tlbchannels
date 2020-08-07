@@ -169,6 +169,10 @@ const main = async () => {
             vm3: ["phoronix-test-suite batch-benchmark nginx", "pkill -f '^Phoronix Test Suite'; pkill nginx"], 
             sleep: 15,
         },
+        vm3_disturb128_s2: {
+            vm3: ["~/disturb 128", "pkill disturb"], 
+            sleep: 2,
+        },
     };
     const files = [
         { sndFile: "genesis.txt", rcvFile: "out.txt" },
