@@ -13,14 +13,16 @@ const parseFile = (file) => {
     const bandwidth = (correctPackets * 30) / timeReceiver / 1000;
     const packetError = content.match(/packetErrorRate: (.*)/)[1];
     const byteError = content.match(/byteErrorRate: (.*)/)[1];
-    const parsed = `${config},${bandwidth},${byteError},${packetError}`
+    const packetsSent = content.match(/sending (.*) packets/)[1];
+    const packetsReceived = content.match(/packets received: (.*)/)[1];
+    const parsed = `${config},${bandwidth},${byteError},${packetError},${packetsSent},${packetsReceived}`
     console.log(parsed);
     return parsed;
 }
 
 // entry point
 const main = () => {
-    let result = "scen,evict,file,sndwindow,rs,iter,bandwidth,byteerror,packeterror\n";
+    let result = "scen,evict,check,file,sndwindow,rs,iter,bandwidth,byteerror,packeterror,packetssent,packetsrecv\n";
     glob(process.argv[2] + "/**/result.txt", (err, files) => {
         files.forEach((f) => {
             if (existsSync(f.replace("result.txt", "finish.txt"))) {
