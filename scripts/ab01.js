@@ -161,18 +161,6 @@ const main = async () => {
 
     const scenarios = {
         idle: {},
-        vm3_pmbench_s13: {
-            vm3: ["phoronix-test-suite batch-benchmark pmbench", "pkill -f '^Phoronix Test Suite'; pkill pmbench"], 
-            sleep: 13,
-        },
-        vm3_nginx_s15: {
-            vm3: ["phoronix-test-suite batch-benchmark nginx", "pkill -f '^Phoronix Test Suite'; pkill nginx"], 
-            sleep: 15,
-        },
-        vm3_disturb128_s2: {
-            vm3: ["~/disturb 128", "pkill disturb"], 
-            sleep: 2,
-        },
     };
     const files = [
         { sndFile: "genesis.txt", rcvFile: "out.txt" },
@@ -180,14 +168,10 @@ const main = async () => {
         // { sndFile: "pic.bmp", rcvFile: "out.bmp" },
         // { sndFile: "beat.mp3", rcvFile: "out.mp3" },
     ];
-    const checksums = [["crc8", "-DCHK_CRC8"], ["berger", "-DCHK_BERGER"], ["custom", "-DCHK_CUSTOM"]];
-    const evictions = [12,13,11];
-    const sndWindows = [10,50,100];
-    const rss = [0,32,64,96];
-    // const thress = [72,74,76];
-    // const wins = [2,3];
-    const thress = [74];
-    const wins = [2];
+    const checksums = [["berger", "-DCHK_BERGER"]];
+    const evictions = [7];
+    const sndWindows = [80,120,240];
+    const rss = [0];
 
     let notFinished = [];
     for (let scen in scenarios) {
@@ -196,14 +180,10 @@ const main = async () => {
                 for ({ sndFile, rcvFile } of files) {
                     for (sndWindow of sndWindows) {
                         for (rs of rss) {
-                            for (thres of thress) {
-                                for (win of wins) {
-                                    for (let iter = 0; iter < 10; iter++) {
-                                        const config = `${scen},${evict},${check},${sndFile},${sndWindow},${rs},${thres},${win},${iter}`;
-                                        if (!fs.existsSync(`${evalDir}/tsc00/${config}/finish.txt`)) {
-                                            notFinished.push(config);
-                                        }
-                                    }
+                            for (let iter = 0; iter < 10; iter++) {
+                                const config = `${scen},${evict},${check},${sndFile},${sndWindow},${rs},${iter}`;
+                                if (!fs.existsSync(`${evalDir}/ab01/${config}/finish.txt`)) {
+                                    notFinished.push(config);
                                 }
                             }
                         }
@@ -220,20 +200,16 @@ const main = async () => {
                 for ({ sndFile, rcvFile } of files) {
                     for (sndWindow of sndWindows) {
                         for (rs of rss) {
-                            for (thres of thress) {
-                                for (win of wins) {
-                                    for (let iter = 0; iter < 10; iter++) {
-                                        const config = `${scen},${evict},${check},${sndFile},${sndWindow},${rs},${thres},${win},${iter}`;
-                                        if (notFinished.includes(config)) {
-                                            console.log(config);
-                                            const outDir = `${evalDir}/tsc00/${config}`;
-                                            const buildFlags = ["-DARCH_BROADWELL", `-DNUM_EVICTIONS=${evict}`, `-DRDTSC_THRESHOLD=${thres}`, `-DRDTSC_WINDOW=${win}`, checkFlag];
-                                            if (rs > 0) buildFlags.push(`-DREED_SOLOMON=${rs}`);
-                                            await compileAndCopy(buildFlags);
-                                            await run(sndFile, rcvFile, sndWindow, scenarios[scen], outDir, buildFlags);
-                                            writeFileSync(`${outDir}/finish.txt`, new Date().toISOString());
-                                        }
-                                    }
+                            for (let iter = 0; iter < 10; iter++) {
+                                const config = `${scen},${evict},${check},${sndFile},${sndWindow},${rs},${iter}`;
+                                if (notFinished.includes(config)) {
+                                    console.log(config);
+                                    const outDir = `${evalDir}/ab01/${config}`;
+                                    const buildFlags = ["-DARCH_BROADWELL", `-DNUM_EVICTIONS=${evict}`, checkFlag];
+                                    if (rs > 0) buildFlags.push(`-DREED_SOLOMON=${rs}`);
+                                    await compileAndCopy(buildFlags);
+                                    await run(sndFile, rcvFile, sndWindow, scenarios[scen], outDir, buildFlags);
+                                    writeFileSync(`${outDir}/finish.txt`, new Date().toISOString());
                                 }
                             }
                         }

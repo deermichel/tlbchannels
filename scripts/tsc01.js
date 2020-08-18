@@ -165,10 +165,6 @@ const main = async () => {
             vm3: ["phoronix-test-suite batch-benchmark pmbench", "pkill -f '^Phoronix Test Suite'; pkill pmbench"], 
             sleep: 13,
         },
-        vm3_nginx_s15: {
-            vm3: ["phoronix-test-suite batch-benchmark nginx", "pkill -f '^Phoronix Test Suite'; pkill nginx"], 
-            sleep: 15,
-        },
         vm3_disturb128_s2: {
             vm3: ["~/disturb 128", "pkill disturb"], 
             sleep: 2,
@@ -184,10 +180,8 @@ const main = async () => {
     const evictions = [12,13,11];
     const sndWindows = [10,50,100];
     const rss = [0,32,64,96];
-    // const thress = [72,74,76];
-    // const wins = [2,3];
-    const thress = [74];
-    const wins = [2];
+    const thress = [72,74,76];
+    const wins = [2,3];
 
     let notFinished = [];
     for (let scen in scenarios) {
