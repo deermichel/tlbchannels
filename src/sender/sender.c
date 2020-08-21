@@ -24,8 +24,13 @@ void send_packet(packet_t *packet) {
                 // to send a 1-bit, we evict the whole stlb set by accessing addresses that fall into the respective 
                 // stlb set.
                 for (int way = 0; way < NUM_EVICTIONS; way++) {
-                    TOUCH_MEMORY(ADDR(BASE_ADDR, set ^ (TLB_SETS / 2), way % TLB_WAYS)); // send to adjacent hyperthread
-                    // TOUCH_MEMORY(ADDR(BASE_ADDR, set, way)); // send to same hyperthread
+#ifdef RDTSC_WINDOW
+                    TOUCH_MEMORY(ADDR(BASE_ADDR, set ^ (TLB_SETS / 2), way)); // tsc: send to adjacent hyperthread
+                    // TOUCH_MEMORY(ADDR(BASE_ADDR, set, way)); // tsc: send to same hyperthread
+#elif
+                    TOUCH_MEMORY(ADDR(BASE_ADDR, set ^ (TLB_SETS / 2), way % TLB_WAYS)); // ab: send to adjacent hyperthread
+                    // TOUCH_MEMORY(ADDR(BASE_ADDR, set, way % TLB_WAYS)); // ab: send to same hyperthread
+#endif
                 }
             }
         }
