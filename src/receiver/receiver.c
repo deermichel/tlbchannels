@@ -171,6 +171,7 @@ int main(int argc, char **argv) {
         if (crc8(packet.raw, PACKET_SIZE) != 0) continue;
 #elif defined(CHK_CUSTOM) // custom xor
         if (packet.header[1] != (~(packet.header[0] ^ packet.payload[0]) & 0xFF)) continue;
+        // if (packet.header[1] != (packet.header[0] ^ packet.payload[0])) continue;
 #endif
 
         // skip presumably tlb flushes (0xFF) (rs requires either 0x00 or 0xFF seq - but we can afford dropping some packets)

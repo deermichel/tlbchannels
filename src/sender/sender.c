@@ -27,7 +27,7 @@ void send_packet(packet_t *packet) {
 #ifdef RDTSC_WINDOW
                     TOUCH_MEMORY(ADDR(BASE_ADDR, set ^ (TLB_SETS / 2), way)); // tsc: send to adjacent hyperthread
                     // TOUCH_MEMORY(ADDR(BASE_ADDR, set, way)); // tsc: send to same hyperthread
-#elif
+#else
                     TOUCH_MEMORY(ADDR(BASE_ADDR, set ^ (TLB_SETS / 2), way % TLB_WAYS)); // ab: send to adjacent hyperthread
                     // TOUCH_MEMORY(ADDR(BASE_ADDR, set, way % TLB_WAYS)); // ab: send to same hyperthread
 #endif
