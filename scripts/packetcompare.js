@@ -3,7 +3,7 @@ const fs = require("fs");
 const readFile = util.promisify(fs.readFile);
 
 // payload bytes - must match packet.h
-const payloadSize = 30;
+const payloadSize = 30; // parseInt(process.argv[4]);
 
 // entry point
 const main = async () => {
@@ -42,6 +42,7 @@ const main = async () => {
         sent, received, correct, lost, inserted,
         packetCorrectness: correct / sent,
         packetErrorRate: 1 - (correct / sent),
+        payloadSize,
     };
     console.log(results);
 

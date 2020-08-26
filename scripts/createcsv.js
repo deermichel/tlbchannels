@@ -9,13 +9,14 @@ const parseFile = (file) => {
     const content = readFileSync(file, "utf8");
     const config = file.match(/..eval\/(.*)\//)[1];
     const correctPackets = content.match(/correct: (.*),/)[1];
+    // const payloadSize = content.match(/payloadSize: (.*)/)[1];
     const timeReceiver = content.match(/time: (.*) s/)[1];
     const bandwidth = (correctPackets * 30) / timeReceiver / 1000;
-    const packetError = content.match(/packetErrorRate: (.*)/)[1];
+    const packetError = content.match(/packetErrorRate: ([0-9.]*)/)[1];
     const byteError = content.match(/byteErrorRate: (.*)/)[1];
     const packetsSent = content.match(/sending (.*) packets/)[1];
     const packetsReceived = content.match(/packets received: (.*)/)[1];
-    const parsed = `${config},${bandwidth},${byteError},${packetError},${packetsSent},${packetsReceived}`
+    const parsed = `${config},${bandwidth},${byteError},${packetError},${packetsSent},${packetsReceived}`;
     console.log(parsed);
     return parsed;
 }

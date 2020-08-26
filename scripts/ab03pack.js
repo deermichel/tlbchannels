@@ -73,7 +73,7 @@ const disconnect = async () => {
 }
 
 // run config and evaluate results
-const run = async (sndFile, rcvFile, sndWindow, runParallel, destDir, flags) => {
+const run = async (sndFile, rcvFile, sndWindow, runParallel, destDir, flags, payloadSize) => {
     mkdirSync(destDir, { recursive: true });
 
     // run parallel
@@ -145,7 +145,7 @@ const run = async (sndFile, rcvFile, sndWindow, runParallel, destDir, flags) => 
 
     // compare and save results
     const [c1, c2] = await Promise.all([
-        exec(`node packetcompare.js "${destDir}/${sndFile}" "${destDir}/${rcvFile}"`),
+        exec(`node packetcompare.js "${destDir}/${sndFile}" "${destDir}/${rcvFile}" ${payloadSize-2}`),
         exec(`node bytecompare.js "${destDir}/${sndFile}" "${destDir}/${rcvFile}"`),
     ]);
     const results = `--- packetcompare ---\n${c1.stdout}\n--- bytecompare ---\n${c2.stdout}\n---\n`;
@@ -189,10 +189,10 @@ const main = async () => {
         //     vm3: ["phoronix-test-suite batch-benchmark pmbench", "pkill -f '^Phoronix Test Suite'; pkill pmbench"], 
         //     sleep: 13,
         // },
-        vm3_nginx_s15: {
-            vm3: ["phoronix-test-suite batch-benchmark nginx", "pkill -f '^Phoronix Test Suite'; pkill nginx"], 
-            sleep: 15,
-        },
+        // vm3_nginx_s15: {
+        //     vm3: ["phoronix-test-suite batch-benchmark nginx", "pkill -f '^Phoronix Test Suite'; pkill nginx"], 
+        //     sleep: 15,
+        // },
         // vm3_disturb128_s2: {
         //     vm3: ["~/disturb 128", "pkill disturb"], 
         //     sleep: 2,
@@ -201,35 +201,38 @@ const main = async () => {
     const files = [
         { sndFile: "genesis.txt", rcvFile: "out.txt" },
         // { sndFile: "json.h", rcvFile: "out.h" },
-        { sndFile: "pic.bmp", rcvFile: "out.bmp" },
-        { sndFile: "beat.mp3", rcvFile: "out.mp3" },
+        // { sndFile: "pic.bmp", rcvFile: "out.bmp" },
+        // { sndFile: "beat.mp3", rcvFile: "out.mp3" },
     ];
     const configs = [
         { check: ["berger", "-DCHK_BERGER"], evict: 8, rs: 32, sndWindow: 120 },
-        { check: ["crc8", "-DCHK_CRC8"], evict: 8, rs: 96, sndWindow: 960 },
+        // { check: ["crc8", "-DCHK_CRC8"], evict: 8, rs: 96, sndWindow: 960 },
         // { check: ["crc8", "-DCHK_CRC8"], evict: 8, rs: 64, sndWindow: 120 },
         // { check: ["crc8", "-DCHK_CRC8"], evict: 8, rs: 64, sndWindow: 240 },
         // { check: ["berger", "-DCHK_BERGER"], evict: 8, rs: 64, sndWindow: 120 },
         // { check: ["berger", "-DCHK_BERGER"], evict: 8, rs: 64, sndWindow: 240 },
         { check: ["custom", "-DCHK_CUSTOM"], evict: 13, rs: 96, sndWindow: 10, tsc: true },
         // { check: ["crc8", "-DCHK_CRC8"], evict: 13, rs: 96, sndWindow: 50, tsc: true },
-        { check: ["crc8", "-DCHK_CRC8"], evict: 13, rs: 96, sndWindow: 100, tsc: true },
+        // { check: ["crc8", "-DCHK_CRC8"], evict: 13, rs: 96, sndWindow: 100, tsc: true },
     ];
     // const checksums = [["crc8", "-DCHK_CRC8"], ["berger", "-DCHK_BERGER"], ["custom", "-DCHK_CUSTOM"]];
     // const evictions = [8,9,7];
     // const sndWindows = [80,100,120,240,480,720,960,1280];
     // const rss = [0,32,64,96];
+    const packetsize = [8,16,24,32];
 
     let notFinished = [];
     for (let scen in scenarios) {
         for ({ sndFile, rcvFile } of files) {
             for (config of configs) {
-                for (let iter = 0; iter < 10; iter++) {
-                    const { evict, rs, sndWindow, tsc } = config;
-                    const [check] = config.check;
-                    const configstr = `${tsc ? "tsc-" : ""}${scen},${evict},${check},${sndFile},${sndWindow},${rs},${iter}`;
-                    if (!fs.existsSync(`${evalDir}/ab02/${configstr}/finish.txt`)) {
-                        notFinished.push(configstr);
+                for (size of packetsize) {
+                    for (let iter = 0; iter < 10; iter++) {
+                        const { evict, rs, sndWindow, tsc } = config;
+                        const [check] = config.check;
+                        const configstr = `${tsc ? "tsc-" : ""}${scen},${evict},${check},${sndFile},${sndWindow},${rs},${size},${iter}`;
+                        if (!fs.existsSync(`${evalDir}/ab03/${configstr}/finish.txt`)) {
+                            notFinished.push(configstr);
+                        }
                     }
                 }
             }
@@ -240,19 +243,21 @@ const main = async () => {
     for (let scen in scenarios) {
         for ({ sndFile, rcvFile } of files) {
             for (config of configs) {
-                for (let iter = 0; iter < 10; iter++) {
-                    const { evict, rs, sndWindow, tsc } = config;
-                    const [check, checkFlag] = config.check;
-                    const configstr = `${tsc ? "tsc-" : ""}${scen},${evict},${check},${sndFile},${sndWindow},${rs},${iter}`;
-                    if (notFinished.includes(configstr)) {
-                        console.log(configstr);
-                        const outDir = `${evalDir}/ab02/${configstr}`;
-                        const buildFlags = ["-DARCH_BROADWELL", `-DNUM_EVICTIONS=${evict}`, checkFlag];
-                        if (tsc) buildFlags.push("-DRDTSC_THRESHOLD=74", "-DRDTSC_WINDOW=2")
-                        if (rs > 0) buildFlags.push(`-DREED_SOLOMON=${rs}`);
-                        await compileAndCopy(buildFlags);
-                        await run(sndFile, rcvFile, sndWindow, scenarios[scen], outDir, buildFlags);
-                        writeFileSync(`${outDir}/finish.txt`, new Date().toISOString());
+                for (size of packetsize) {
+                    for (let iter = 0; iter < 10; iter++) {
+                        const { evict, rs, sndWindow, tsc } = config;
+                        const [check, checkFlag] = config.check;
+                        const configstr = `${tsc ? "tsc-" : ""}${scen},${evict},${check},${sndFile},${sndWindow},${rs},${size},${iter}`;
+                        if (notFinished.includes(configstr)) {
+                            console.log(configstr);
+                            const outDir = `${evalDir}/ab03/${configstr}`;
+                            const buildFlags = ["-DARCH_BROADWELL", `-DNUM_EVICTIONS=${evict}`, `-DPACKET_SIZE=${size}`, checkFlag];
+                            if (tsc) buildFlags.push("-DRDTSC_THRESHOLD=74", "-DRDTSC_WINDOW=2")
+                            if (rs > 0) buildFlags.push(`-DREED_SOLOMON=${rs}`);
+                            await compileAndCopy(buildFlags);
+                            await run(sndFile, rcvFile, sndWindow, scenarios[scen], outDir, buildFlags, size);
+                            writeFileSync(`${outDir}/finish.txt`, new Date().toISOString());
+                        }
                     }
                 }
             }
