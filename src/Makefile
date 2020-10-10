@@ -22,11 +22,6 @@ receiver:
 	mkdir -p ../bin
 	gcc -Wall -Wno-unused-result -g -O3 -msse4.2 $(CFLAGS) -o ../bin/receiver receiver/receiver.c -lfec
 
-# uses ptreceiver kernel module -> accessed bits, crc8 only
-kreceiver:
-	mkdir -p ../bin
-	gcc -Wall -Wno-unused-result -g -O3 -msse4.2 $(CFLAGS) -o ../bin/kreceiver receiver/kreceiver.c -lfec
-
 sender:
 	mkdir -p ../bin
 	gcc -Wall -g -O3 -msse4.2 $(CFLAGS) -o ../bin/sender sender/sender.c -lfec

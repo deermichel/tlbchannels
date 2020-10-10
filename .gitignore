@@ -9,29 +9,12 @@
 *.symvers
 *.d
 
-# node
-node_modules/
-package-lock.json
-
 # binaries
 bin/
-src/disturb
-src/receiver/noise
-src/zeroones
 
 # misc
 .vscode
+.DS_Store
 
 # logging
 *.tmp
-eval/
-
-# test files
-src/receiver/out.bmp
-src/receiver/out.txt
-src/sender/pic.bmp
-src/sender/beat.mp3
-src/sender/text.txt
-
-# tmp
-src_old/
