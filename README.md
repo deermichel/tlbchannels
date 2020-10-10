@@ -20,4 +20,4 @@ Given the general feasibility of TLB-based covert channels, we aim to considerab
 3. Compile (`make CFLAGS="-D..."`) the receiver and sender program with the desired [flags](src/Makefile).
 4. Execute the receiver program on the attacker VM. Use `./receiver --help` to list all available cli args.
 5. Execute the sender program on the victim VM. Use `./sender --help` to list all available cli args.
-6. Think about solutions for this security problem and write another bachelor's thesis.
+6. Think about solutions to this security issue and write another bachelor's thesis.
